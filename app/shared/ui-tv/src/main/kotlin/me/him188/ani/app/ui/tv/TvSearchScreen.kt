@@ -1,0 +1,109 @@
+/*
+ * Copyright (C) 2026 OpenAni and contributors.
+ *
+ * 此源代码的使用受 GNU AFFERO GENERAL PUBLIC LICENSE version 3 许可证的约束, 可以在以下链接找到该许可证.
+ * Use of this source code is governed by the GNU AGPLv3 license, which can be found at the following link.
+ *
+ * https://github.com/open-ani/ani/blob/main/LICENSE
+ */
+
+package me.him188.ani.app.ui.tv
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.paging.LoadState
+import androidx.tv.material3.Text
+import me.him188.ani.app.data.models.preference.NsfwMode
+import me.him188.ani.app.domain.search.SubjectSearchQuery
+import me.him188.ani.app.ui.exploration.search.SearchPageIntent
+import me.him188.ani.app.ui.main.SearchViewModel
+import me.him188.ani.app.ui.search.collectItemsWithLifecycle
+
+@Composable
+fun TvSearchScreen(
+    onSubject: (Int) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    initialKeyword: String? = null,
+    initialTags: List<String>? = null,
+) {
+    val vm = viewModel(key = "tv-search-${initialKeyword.orEmpty()}-${initialTags.orEmpty()}") {
+        SearchViewModel(SubjectSearchQuery(keywords = initialKeyword.orEmpty(), tags = initialTags))
+    }
+    val state by vm.searchPageState.collectAsStateWithLifecycle()
+    val results = state.searchState.collectItemsWithLifecycle()
+    val text = rememberTextFieldState(initialKeyword.orEmpty())
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = rememberTvFocusState("search-input")
+    val pager by state.searchState.pagerFlow.collectAsStateWithLifecycle()
+    var submittedPager by remember { mutableStateOf<Any?>(null) }
+    var awaitingSearch by remember { mutableStateOf(false) }
+    fun search() {
+        keyboard?.hide()
+        submittedPager = pager
+        awaitingSearch = true
+        focus.requestFocus("search-result:")
+        vm.onSearchPageIntent(SearchPageIntent.UpdateQuery(state.query.copy(keywords = text.text.toString().trim()), submit = true))
+    }
+    LaunchedEffect(vm) { vm.onSearchPageIntent(SearchPageIntent.StartInitialSearch) }
+    val resultReady = pager != null && (!awaitingSearch || pager !== submittedPager) &&
+        results.loadState.refresh !is LoadState.Loading
+    LaunchedEffect(resultReady) { if (resultReady) awaitingSearch = false }
+    TvPage("搜索番剧", onBack, modifier, focusState = focus) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            TvOutlinedTextField(
+                state = text,
+                modifier = Modifier.weight(1f).tvFocusTarget("search-input", focus).testTag("tv-search-input"),
+                label = { Text("番剧名称", fontSize = 18.sp) },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                onKeyboardAction = { search() },
+            )
+            TvButton("搜索", ::search, Modifier.tvFocusTarget("search-submit", focus).testTag("tv-search-submit"), enabled = text.text.isNotBlank() || !initialTags.isNullOrEmpty())
+        }
+        if (state.hasActiveSearch) {
+            TvPosterGrid(
+                results,
+                key = { it.subjectId },
+                poster = {
+                    TvPoster(
+                        it.subjectId,
+                        it.title,
+                        it.imageUrl,
+                        it.tags,
+                        nsfwMode = if (it.hide) NsfwMode.HIDE else it.nsfwMode,
+                    )
+                },
+                onSubject = onSubject,
+                emptyTitle = "没有找到匹配的番剧，请换个名称试试",
+                focusState = focus,
+                focusGroup = "search-result:",
+                fallbackKey = "search-input",
+                ready = resultReady,
+            )
+        } else {
+            TvMessage("输入番剧名称开始搜索", "按遥控器确认键打开输入法，输入后选择「搜索」。")
+        }
+    }
+}

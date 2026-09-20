@@ -140,6 +140,7 @@ import me.him188.ani.app.ui.lang.settings_watch_together_description
 import me.him188.ani.app.ui.lang.settings_watch_together_social
 import me.him188.ani.app.ui.lang.watch_together_title
 import me.him188.ani.app.ui.settings.SettingsTab
+import me.him188.ani.app.platform.DeviceUiMode
 import me.him188.ani.app.ui.settings.danmaku.DanmakuRegexFilterGroup
 import me.him188.ani.app.ui.settings.danmaku.DanmakuRegexFilterState
 import me.him188.ani.app.ui.settings.danmaku.createTestDanmakuRegexFilterState
@@ -229,6 +230,25 @@ fun SettingsScope.AppearanceGroup(
     val uiSettings by state
 
     LanguageSettingsPlatform(state)
+
+    if (LocalPlatform.current.isAndroid()) {
+        DropdownItem(
+            selected = { uiSettings.deviceUiMode },
+            values = { DeviceUiMode.entries },
+            itemText = {
+                Text(
+                    when (it) {
+                        DeviceUiMode.Auto -> "自动识别"
+                        DeviceUiMode.Television -> "电视 · 遥控器"
+                        DeviceUiMode.Standard -> "手机 / 平板"
+                    },
+                )
+            },
+            onSelect = { state.update(uiSettings.copy(deviceUiMode = it)) },
+            title = { Text("设备界面") },
+            description = { Text("切换界面会返回首页，账号与观看记录保留") },
+        )
+    }
 
     DropdownItem(
         selected = { uiSettings.mainSceneInitialPage },

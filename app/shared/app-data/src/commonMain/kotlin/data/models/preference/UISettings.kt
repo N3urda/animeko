@@ -19,6 +19,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import me.him188.ani.app.navigation.MainScreenPage
+import me.him188.ani.app.platform.DeviceUiMode
 
 
 @Serializable
@@ -47,6 +48,7 @@ data class UISettings(
     val searchSettings: SearchSettings = SearchSettings.Default,
     val episodeProgress: EpisodeProgressSettings = EpisodeProgressSettings.Default,
     val desktopCloseBehavior: DesktopCloseBehavior = DesktopCloseBehavior.EXIT,
+    val deviceUiMode: DeviceUiMode = DeviceUiMode.Auto,
     @Suppress("PropertyName") @Transient val _placeholder: Int = 0,
 ) {
     companion object {

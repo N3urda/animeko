@@ -44,3 +44,8 @@ kls_database.db
 /app/ios/12.4.0
 /app/ios/xcb2.log
 /app/ios/xcodebuild.log
+
+.worktrees/
+.tv-build/
+
+/output/android-tv/

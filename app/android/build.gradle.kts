@@ -41,6 +41,7 @@ android {
         targetSdk = getIntProperty("android.compile.sdk")
         versionCode = getIntProperty("android.version.code")
         versionName = project.version.toString()
+        manifestPlaceholders["appLabel"] = "@string/app_name"
         ndk {
             // Specifies the ABI configurations of your native
             // libraries Gradle should build and package with your app.
@@ -99,6 +100,10 @@ android {
         }
         debug {
             applicationIdSuffix = getLocalProperty("ani.android.debug.applicationIdSuffix") ?: ".debug2"
+            getLocalProperty("ani.android.debug.appName")?.let {
+                resValue("string", "preview_app_name", it)
+                manifestPlaceholders["appLabel"] = "@string/preview_app_name"
+            }
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("debug")
         }
@@ -112,12 +117,14 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        resValues = true
     }
 }
 
 dependencies {
     implementation(projects.app.shared)
     implementation(projects.app.shared.application)
+    implementation(projects.app.shared.uiTv)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

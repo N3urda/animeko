@@ -83,7 +83,7 @@ class AniAppViewModel : AbstractViewModel(), KoinComponent {
     private val settings: SettingsRepository by inject()
     private val httpClientProvider: HttpClientProvider by inject()
     private val downloadManager: MediaDownloadManager by inject()
-    private val webSessionManager: WebSessionManager by inject()
+    val webSessionManager: WebSessionManager by inject()
     private val userRepository: UserRepository by inject()
     private val sessionStateProvider: SessionStateProvider by inject()
 
@@ -114,7 +114,7 @@ class AniAppViewModel : AbstractViewModel(), KoinComponent {
             uiSettings.mainSceneInitialPage,
             themeSettings,
             imageLoaderClient,
-            mediaCacheComposables + listOf(@Composable { WebCaptchaDialogHost(webSessionManager) }),
+            mediaCacheComposables,
             // Windows 并且 ani 语言为中文的话, 显式使用 Microsoft YaHei UI.
             // 如果 Windows 语言不是中文, 那系统会使用 Microsoft JhengHei UI 作为中文字体, 这个字体对简体中文的支持不好.
             if (currentPlatform() is Platform.Windows && uiSettings.appLanguage == LocaleZhCN) {
@@ -136,6 +136,7 @@ class AniAppViewModel : AbstractViewModel(), KoinComponent {
 @Composable
 fun AniApp(
     modifier: Modifier = Modifier,
+    webCaptchaHost: @Composable (WebSessionManager) -> Unit = { WebCaptchaDialogHost(it) },
     content: @Composable () -> Unit,
 ) {
     val viewModel = viewModel { AniAppViewModel() }
@@ -165,6 +166,7 @@ fun AniApp(
                     for (composable in appState.overlayComposables) {
                         composable()
                     }
+                    webCaptchaHost(viewModel.webSessionManager)
                 }
 
                 Column {
