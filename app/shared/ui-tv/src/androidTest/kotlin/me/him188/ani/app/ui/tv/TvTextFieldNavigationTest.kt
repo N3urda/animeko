@@ -67,6 +67,62 @@ class TvTextFieldNavigationTest {
     }
 
     @Test
+    fun backClosesEditingAndConfirmReopensWithoutLosingNavigation() = runAniComposeUiTest {
+        val keyboard = RecordingKeyboardController()
+        setContent {
+            TvTheme {
+                CompositionLocalProvider(LocalSoftwareKeyboardController provides keyboard) {
+                    val focus = remember { FocusRequester() }
+                    Column {
+                        TvOutlinedTextField(
+                            state = rememberTextFieldState("test@example.com"),
+                            modifier = Modifier.focusRequester(focus).testTag("input"),
+                        )
+                        TvButton("发送验证码", {}, Modifier.testTag("send"))
+                    }
+                    LaunchedEffect(Unit) { focus.requestFocus() }
+                }
+            }
+        }
+        onNodeWithTag("input").performKeyInput { keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter) }
+        runOnIdle { assertEquals(1, keyboard.showRequests) }
+        onNodeWithTag("input").performKeyInput { keyDown(Key.Back); keyUp(Key.Back) }
+        onNodeWithTag("input").assertIsFocused()
+        runOnIdle { assertEquals(1, keyboard.hideRequests) }
+        onNodeWithTag("input").performKeyInput { keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter) }
+        runOnIdle { assertEquals(2, keyboard.showRequests) }
+        onNodeWithTag("input").performKeyInput { keyDown(Key.Back); keyUp(Key.Back) }
+        onNodeWithTag("input").performKeyInput { keyDown(Key.DirectionDown); keyUp(Key.DirectionDown) }
+        onNodeWithTag("send").assertIsFocused()
+    }
+
+    @Test
+    fun editingLeftMovesCursorAndBackRestoresCategoryNavigation() = runAniComposeUiTest {
+        var categoryRequests = 0
+        val keyboard = RecordingKeyboardController()
+        setContent {
+            TvTheme {
+                CompositionLocalProvider(LocalSoftwareKeyboardController provides keyboard) {
+                    val focus = remember { FocusRequester() }
+                    TvOutlinedTextField(
+                        state = rememberTextFieldState("https://example.com/feed"),
+                        modifier = Modifier.focusRequester(focus).testTag("input"),
+                        onNavigateLeft = { categoryRequests++ },
+                    )
+                    LaunchedEffect(Unit) { focus.requestFocus() }
+                }
+            }
+        }
+        onNodeWithTag("input").performKeyInput { keyDown(Key.DirectionCenter); keyUp(Key.DirectionCenter) }
+        onNodeWithTag("input").performKeyInput { keyDown(Key.DirectionLeft); keyUp(Key.DirectionLeft) }
+        onNodeWithTag("input").assertIsFocused()
+        runOnIdle { assertEquals(0, categoryRequests) }
+        onNodeWithTag("input").performKeyInput { keyDown(Key.Back); keyUp(Key.Back) }
+        onNodeWithTag("input").performKeyInput { keyDown(Key.DirectionLeft); keyUp(Key.DirectionLeft) }
+        runOnIdle { assertEquals(1, categoryRequests) }
+    }
+
+    @Test
     fun confirmRequestsKeyboardAndDownLeavesEmailInput() = runAniComposeUiTest {
         val keyboard = RecordingKeyboardController()
         setContent {
@@ -102,5 +158,6 @@ class TvTextFieldNavigationTest {
 private class RecordingKeyboardController : SoftwareKeyboardController {
     var showRequests = 0
     override fun show() { showRequests++ }
-    override fun hide() = Unit
+    var hideRequests = 0
+    override fun hide() { hideRequests++ }
 }

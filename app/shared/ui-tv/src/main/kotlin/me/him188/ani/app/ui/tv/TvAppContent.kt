@@ -83,7 +83,7 @@ fun TvAppContent(
                             is NavRoutes.SubjectSearch -> TvSearchScreen(subject, back, initialKeyword = route.keyword, initialTags = route.tags)
                             is NavRoutes.SubjectDetail -> TvSubjectScreen(route.subjectId, episode, back)
                             is NavRoutes.EpisodeDetail -> TvPlayerScreen(route.subjectId, route.episodeId, back)
-                            NavRoutes.PlaybackHistory -> TvHistoryScreen(episode, back)
+                            NavRoutes.PlaybackHistory -> TvHistoryScreen(episode, back, onLogin = navigator::navigateLogin)
                             is NavRoutes.Settings, NavRoutes.Caches -> TvSettingsScreen(deviceUiMode, onDeviceUiMode, navigator::navigateLogin, back)
                             NavRoutes.EmailLoginStart, NavRoutes.EmailLoginVerify -> TvLoginScreen(
                                 onSuccess = { navigator.popBackOrNavigateToMain(MainScreenPage.Exploration) },

@@ -30,10 +30,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.LoadState
+import androidx.paging.compose.LazyPagingItems
 import androidx.tv.material3.Text
 import me.him188.ani.app.data.models.preference.NsfwMode
 import me.him188.ani.app.domain.search.SubjectSearchQuery
 import me.him188.ani.app.ui.exploration.search.SearchPageIntent
+import me.him188.ani.app.ui.exploration.search.SubjectPreviewItemInfo
 import me.him188.ani.app.ui.main.SearchViewModel
 import me.him188.ani.app.ui.search.collectItemsWithLifecycle
 
@@ -57,6 +59,7 @@ fun TvSearchScreen(
     var submittedPager by remember { mutableStateOf<Any?>(null) }
     var awaitingSearch by remember { mutableStateOf(false) }
     fun search() {
+        if (text.text.isBlank() && initialTags.isNullOrEmpty()) return
         keyboard?.hide()
         submittedPager = pager
         awaitingSearch = true
@@ -83,27 +86,52 @@ fun TvSearchScreen(
             TvButton("搜索", ::search, Modifier.tvFocusTarget("search-submit", focus).testTag("tv-search-submit"), enabled = text.text.isNotBlank() || !initialTags.isNullOrEmpty())
         }
         if (state.hasActiveSearch) {
-            TvPosterGrid(
-                results,
-                key = { it.subjectId },
-                poster = {
-                    TvPoster(
-                        it.subjectId,
-                        it.title,
-                        it.imageUrl,
-                        it.tags,
-                        nsfwMode = if (it.hide) NsfwMode.HIDE else it.nsfwMode,
-                    )
-                },
-                onSubject = onSubject,
-                emptyTitle = "没有找到匹配的番剧，请换个名称试试",
-                focusState = focus,
-                focusGroup = "search-result:",
-                fallbackKey = "search-input",
-                ready = resultReady,
-            )
+            if (awaitingSearch && pager === submittedPager) {
+                TvStaticFocusGroup(focus, "search-result:", emptyList(), ready = false, fallbackKey = "search-input")
+                TvMessage("正在搜索…", "可返回输入框修改关键词。")
+            } else {
+                TvCatalogueSearchResults(results, resultReady, focus, onSubject)
+            }
         } else {
             TvMessage("输入番剧名称开始搜索", "按遥控器确认键打开输入法，输入后选择「搜索」。")
         }
+    }
+}
+
+@Composable
+internal fun TvCatalogueSearchResults(
+    results: LazyPagingItems<SubjectPreviewItemInfo>,
+    ready: Boolean,
+    focus: TvFocusState,
+    onSubject: (Int) -> Unit,
+) {
+    val empty = ready && results.itemCount == 0 && results.loadState.refresh !is LoadState.Error
+    if (empty) {
+        TvStaticFocusGroup(focus, "search-result:", listOf("search-result:edit"), fallbackKey = "search-input")
+        TvMessage(
+            "没有找到匹配的番剧", "试试番剧简称、原名或更少的关键词。", "修改关键词",
+            onAction = { focus.requestFocus("search-input") },
+            actionModifier = Modifier.tvFocusTarget("search-result:edit", focus),
+        )
+    } else {
+        TvPosterGrid(
+            results,
+            key = { it.subjectId },
+            poster = {
+                TvPoster(
+                    it.subjectId,
+                    it.title,
+                    it.imageUrl,
+                    if (it.rating.total > 0) "评分 ${it.rating.score}" else "暂无评分",
+                    nsfwMode = if (it.hide) NsfwMode.HIDE else it.nsfwMode,
+                )
+            },
+            onSubject = onSubject,
+            emptyTitle = "没有可显示的番剧，请修改关键词或检查内容偏好",
+            focusState = focus,
+            focusGroup = "search-result:",
+            fallbackKey = "search-input",
+            ready = ready,
+        )
     }
 }

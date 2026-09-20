@@ -57,22 +57,32 @@ class TvFocusState internal constructor(
     internal val requestedKey: String get() = savedKey.value ?: initialKey
     private var hasRestored = false
     private var manualNavigation = false
+    private var initialFocusProvisional = false
+    private var hasUserInteracted = false
 
     internal fun onNavigationKey(event: KeyEvent) {
+        if (event.type == KeyEventType.KeyDown) hasUserInteracted = true
         if (event.key in listOf(Key.DirectionUp, Key.DirectionDown, Key.DirectionLeft, Key.DirectionRight)) {
             manualNavigation = event.type == KeyEventType.KeyDown
         }
     }
 
-    internal fun clearManualNavigation() { manualNavigation = false }
+    internal fun clearManualNavigation() {
+        manualNavigation = false
+        initialFocusProvisional = false
+    }
 
     fun requestFocus(key: String) {
         saveTarget(key)
         requestVersion++
     }
 
-    internal fun requestInitialFocus(key: String) {
-        if (savedKey.value == null) requestFocus(key)
+    /** 加载期间的临时焦点只在尚未操作且页面持续可见时让位于内容. */
+    internal fun requestInitialFocus(key: String, provisional: Boolean = false) {
+        if (savedKey.value == null || (initialFocusProvisional && !hasUserInteracted)) {
+            requestFocus(key)
+            initialFocusProvisional = provisional
+        }
     }
 
     private fun saveTarget(key: String) {

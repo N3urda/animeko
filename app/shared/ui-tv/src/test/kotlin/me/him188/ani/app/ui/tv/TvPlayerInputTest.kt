@@ -13,13 +13,37 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class TvPlayerInputTest {
-    @Test fun firstConfirmOnlyShowsControlsAndConsumesRelease() {
+    @Test fun hiddenConfirmTogglesPlaybackOnceAndConsumesRelease() {
         val down = tvPlayerInput(TvPlayerInputState(), TvPlayerKey.Confirm, true, 0, 0, 5000, 60000)
         assertEquals(TvPlayerOverlay.Controls, down.state.overlay)
+        assertTrue(down.togglePlayback)
         assertNull(down.seekToMillis)
         val up = tvPlayerInput(down.state, TvPlayerKey.Confirm, false, 0, 20, 5000, 60000)
         assertTrue(up.consumed)
+        assertFalse(up.togglePlayback)
         assertNull(up.seekToMillis)
+    }
+    @Test fun heldConfirmDoesNotToggleAgainAfterRevealingControls() {
+        val first = tvPlayerInput(TvPlayerInputState(), TvPlayerKey.Confirm, true, 0, 0, 5000, 60000)
+        val repeat = tvPlayerInput(first.state, TvPlayerKey.Confirm, true, 1, 600, 5000, 60000)
+        assertTrue(first.togglePlayback)
+        assertFalse(repeat.togglePlayback)
+        assertTrue(repeat.consumed)
+    }
+    @Test fun peekingControlsNeverTogglesPlayback() {
+        for (key in listOf(TvPlayerKey.Up, TvPlayerKey.Down, TvPlayerKey.Menu)) {
+            val result = tvPlayerInput(TvPlayerInputState(), key, true, 0, 0, 5000, 60000)
+            assertEquals(TvPlayerOverlay.Controls, result.state.overlay)
+            assertFalse(result.togglePlayback)
+            assertTrue(tvPlayerInput(result.state, key, false, 0, 0, 5000, 60000).consumed)
+        }
+    }
+    @Test fun durationDisappearingDuringPreviewCannotCommitASeek() {
+        val preview = TvPlayerInputState(previewMillis = 15000)
+        val result = tvPlayerInput(preview, TvPlayerKey.Confirm, true, 0, 0, 5000, 0)
+        assertNull(result.seekToMillis)
+        assertNull(result.state.previewMillis)
+        assertFalse(result.togglePlayback)
     }
     @Test fun seekPreviewDoesNotSeekUntilOneConfirmPress() {
         val preview = tvPlayerInput(TvPlayerInputState(), TvPlayerKey.Right, true, 0, 0, 5000, 60000)
@@ -68,6 +92,11 @@ class TvPlayerInputTest {
         assertNull(result.state.previewMillis)
         assertNull(result.seekToMillis)
         assertEquals(TvPlayerOverlay.Controls, result.state.overlay)
+    }
+    @Test fun subtitleBackReturnsToSettingsBeforeControls() {
+        val result = tvPlayerBack(TvPlayerInputState(TvPlayerOverlay.Subtitles))
+        assertEquals(TvPlayerOverlay.Options, result.state.overlay)
+        assertEquals(TvPlayerOverlay.Controls, tvPlayerBack(result.state).state.overlay)
     }
     @Test fun mediaChangeDropsUncommittedPreview() {
         val state = TvPlayerInputState(previewMillis = 50000, heldKey = TvPlayerKey.Right)

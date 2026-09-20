@@ -9,48 +9,57 @@
 
 package me.him188.ani.app.ui.tv
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRestorer
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.tv.material3.Card
+import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import me.him188.ani.app.ui.playback.PlaybackHistoryViewModel
 import me.him188.ani.app.data.models.player.EpisodeHistory
+import me.him188.ani.app.data.models.player.playProgress
 import me.him188.ani.app.data.models.preference.NsfwMode
+import me.him188.ani.app.ui.playback.PlaybackHistoryViewModel
+import me.him188.ani.app.ui.user.SelfInfoStateProducer
 
 @Composable
 fun TvHistoryScreen(
     onEpisode: (Int, Int) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onLogin: (() -> Unit)? = null,
 ) {
     val vm = viewModel { PlaybackHistoryViewModel() }
+    val selfInfo by remember { SelfInfoStateProducer().flow }.collectAsStateWithLifecycle()
     val histories by vm.stateFlow.collectAsStateWithLifecycle()
     val pending by vm.pendingOpsFlow.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -84,13 +93,16 @@ fun TvHistoryScreen(
     )
     var syncing by remember { mutableStateOf(false) }
     var syncError by remember { mutableStateOf(false) }
+    var synced by remember { mutableStateOf(false) }
     fun sync() {
-        if (syncing) return
+        if (syncing || selfInfo.isSessionValid != true) return
         syncing = true
         syncError = false
+        synced = false
         scope.launch {
             try {
                 vm.syncOnce()
+                synced = true
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -102,11 +114,24 @@ fun TvHistoryScreen(
     }
     TvPage(
         "观看历史", onBack, modifier, focusState = focus,
-        actions = { TvButton(if (syncing) "正在同步…" else "同步", ::sync,
-            Modifier.tvFocusTarget("history-sync", focus), enabled = !syncing) },
+        actions = {
+            when (selfInfo.isSessionValid) {
+                true -> TvButton(if (syncing) "正在同步…" else "同步", ::sync,
+                    Modifier.tvFocusTarget("history-sync", focus), enabled = !syncing)
+                false -> TvButton("登录后同步", { onLogin?.invoke() },
+                    Modifier.tvFocusTarget("history-sync", focus), enabled = onLogin != null)
+                null -> TvButton("正在检查账号…", {}, enabled = false)
+            }
+        },
     ) {
         if (pending.isNotEmpty()) Text("${pending.size} 条本地更新等待同步", fontSize = 18.sp)
-        if (syncError) TvMessage("同步失败，本地记录仍可使用", actionLabel = "重试", onAction = ::sync)
+        if (selfInfo.isSessionValid == false) Text("当前显示本地记录，登录后可同步到其他设备。", fontSize = 18.sp)
+        if (syncError) TvMessage(
+            "同步失败，本地记录仍可使用", actionLabel = "重试",
+            onAction = { focus.requestFocus("history:"); sync() },
+            actionModifier = Modifier.tvFocusTarget("history-retry", focus),
+        )
+        if (synced) Text("历史记录已同步", fontSize = 18.sp)
         if (visible.isEmpty()) {
             TvMessage("没有可显示的观看记录", "播放番剧后，可在这里继续观看。")
         } else {
@@ -147,14 +172,36 @@ internal fun TvHistoryCard(
     Card(
         onClick = { if (masked) revealed = true else onClick() },
         modifier = modifier.fillMaxWidth().testTag("tv-history-${history.episodeId}"),
+        border = tvCardBorder(),
+        scale = tvCardScale(),
     ) {
-        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(if (masked) "内容已遮盖" else history.subjectName ?: "条目 ${history.subjectId}",
-                    fontSize = 22.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(if (masked) "按确认键临时显示" else history.episodeName ?: "剧集 ${history.episodeSort ?: history.episodeId}", fontSize = 18.sp)
+        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (masked) "内容已遮盖" else history.subjectName ?: "条目 ${history.subjectId}",
+                        fontSize = 22.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        if (masked) "按确认键临时显示" else history.episodeName?.takeIf { it.isNotBlank() }
+                            ?: "剧集 ${history.episodeSort ?: history.episodeId}",
+                        fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (!masked) Column(Modifier.width(190.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("继续观看", fontSize = 20.sp)
+                    Text(
+                        history.durationMillis?.takeIf { it > 0 }?.let {
+                            "${tvPlaybackTime(history.positionMillis.coerceIn(0, it))} / ${tvPlaybackTime(it)}"
+                        } ?: "已播放 ${tvPlaybackTime(history.positionMillis)}",
+                        fontSize = 18.sp,
+                    )
+                }
             }
-            if (!masked) Text("继续 · ${tvPlaybackTime(history.positionMillis)}", fontSize = 18.sp)
+            if (!masked) history.playProgress?.let { progress ->
+                Box(Modifier.fillMaxWidth().height(4.dp).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                    Box(Modifier.fillMaxWidth(progress).height(4.dp).background(MaterialTheme.colorScheme.primary))
+                }
+            }
         }
     }
 }

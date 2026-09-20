@@ -20,7 +20,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Surface
@@ -36,9 +38,9 @@ fun TvCaptchaDialogHost(manager: WebSessionManager) {
         TvTheme {
             Surface {
                 Column(Modifier.widthIn(max = 640.dp).padding(32.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                    Text("${ui.title} 需要网页验证")
-                    Text("该数据源需要网页交互。请返回播放器选择其他数据源，或从资源菜单重新查询。")
-                    TvButton("返回并选择其他数据源", ui.onDismiss, Modifier.focusRequester(focus))
+                    Text("${ui.title} 需要网页验证", fontSize = 24.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text("该数据源需要网页交互。请返回播放器，打开「换源」选择其他资源。", fontSize = 18.sp)
+                    TvButton("返回播放器", ui.onDismiss, Modifier.focusRequester(focus))
                 }
             }
             LaunchedEffect(ui) { focus.requestFocus() }

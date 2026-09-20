@@ -9,59 +9,30 @@
 
 package me.him188.ani.app.ui.tv
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.platform.LocalContext as AndroidLocalContext
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.tv.material3.Text
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import me.him188.ani.app.domain.player.VideoLoadingState
 import me.him188.ani.app.platform.LocalContext
 import me.him188.ani.app.ui.danmaku.PlayerDanmakuHost
 import me.him188.ani.app.ui.foundation.effects.ScreenOnEffect
-import me.him188.ani.app.ui.foundation.navigation.BackHandler
+import me.him188.ani.app.ui.mediafetch.MediaSelectorState
 import me.him188.ani.app.ui.subject.episode.EpisodePageState
 import me.him188.ani.app.ui.subject.episode.EpisodeViewModel
 import me.him188.ani.app.ui.subject.episode.statistics.VideoStatistics
@@ -69,9 +40,12 @@ import me.him188.ani.app.videoplayer.media.TvMediaSessionBridge
 import me.him188.ani.app.videoplayer.ui.VideoPlayer
 import me.him188.ani.app.videoplayer.ui.progress.audioName
 import me.him188.ani.app.videoplayer.ui.progress.subtitleLanguage
+import me.him188.ani.datasources.api.Media
 import org.openani.mediamp.MediaStatus
+import org.openani.mediamp.features.PlaybackSpeed
 import org.openani.mediamp.features.audioTracks
 import org.openani.mediamp.features.subtitleTracks
+import androidx.compose.ui.platform.LocalContext as AndroidLocalContext
 
 @Composable
 fun TvPlayerScreen(subjectId: Int, initialEpisodeId: Int, onBack: () -> Unit) {
@@ -80,131 +54,147 @@ fun TvPlayerScreen(subjectId: Int, initialEpisodeId: Int, onBack: () -> Unit) {
         EpisodeViewModel(subjectId, initialEpisodeId, initialIsFullscreen = true, context = context)
     }
     vm.mediaResolver.ComposeContent()
-    // 常驻订阅维持现有资源查询、自动选择与播放会话。
+    // 常驻订阅维持资源查询、自动选择与播放会话.
     val page by vm.pageState.collectAsStateWithLifecycle()
     val playback by vm.player.state.collectAsStateWithLifecycle()
     val properties by vm.player.mediaProperties.collectAsStateWithLifecycle()
     val position by vm.player.currentPositionMillis.collectAsStateWithLifecycle()
     val statistics by vm.videoStatisticsFlow.collectAsStateWithLifecycle(VideoStatistics.Placeholder)
-    val duration = properties?.durationMillis ?: 0L
+    val selector = page?.mediaSelectorState
+    val selection = selector?.presentationFlow?.collectAsStateWithLifecycle()?.value
+    val speedFeature = vm.player.features[PlaybackSpeed]
+    val speed = speedFeature?.valueFlow?.collectAsStateWithLifecycle(speedFeature.value)?.value ?: 1f
+    val selectedMedia = selection?.selected?.mediaId
     var input by remember(vm) { mutableStateOf(TvPlayerInputState()) }
-    var activity by remember { mutableLongStateOf(0) }
-    val rootFocus = remember { FocusRequester() }
-    val playFocus = remember { FocusRequester() }
-    val progressFocus = remember { FocusRequester() }
-    val menuFocus = remember { TvPlayerOverlay.entries.associateWith { FocusRequester() } }
-    var restoreFocus by remember { mutableStateOf(playFocus) }
+    var moreOption by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    val selectedMedia = page?.mediaSelectorState?.presentationFlow?.collectAsStateWithLifecycle()?.value?.selected?.mediaId
-    val error = page?.loadError != null || statistics.videoLoadingState is VideoLoadingState.Failed || playback.mediaStatus is MediaStatus.Error
+    val status = tvPlayerStatus(
+        loadingState = statistics.videoLoadingState,
+        mediaStatus = playback.mediaStatus,
+        isBuffering = playback.isBuffering,
+        isPlaying = playback.isPlaying,
+        playWhenReady = playback.playWhenReady,
+        sourceLoading = statistics.mediaSourceLoading || selection?.isPlaceholder != false,
+        hasSelectedMedia = selectedMedia != null,
+        pageLoading = page == null || page?.isLoading == true || statistics.isPlaceholder,
+        pageError = page?.loadError,
+    )
     fun back() {
         val result = tvPlayerBack(input)
         input = result.state
         if (result.exitPlayer) onBack()
     }
-    fun menu(overlay: TvPlayerOverlay) {
-        restoreFocus = if (overlay == TvPlayerOverlay.Controls) playFocus else menuFocus.getValue(overlay)
-        input = input.copy(overlay = overlay, previewMillis = null)
+    fun retry() {
+        val loadError = page?.loadError
+        if (loadError != null) vm.retryLoad(loadError)
+        else scope.launch {
+            vm.switchEpisode(vm.episodeSelectorState.current?.episodeId ?: initialEpisodeId)
+        }
+        input = input.copy(overlay = TvPlayerOverlay.Controls, previewMillis = null)
     }
-    BackHandler { back() }
     LaunchedEffect(vm) { vm.onUIReady(); vm.collectDanmakuConfig() }
     LaunchedEffect(selectedMedia, page?.episodePresentation?.episodeId) { input = input.mediaChanged() }
-    LaunchedEffect(error) { if (error) menu(TvPlayerOverlay.Controls) }
-    LaunchedEffect(input.overlay, input.previewMillis != null) {
-        when {
-            input.previewMillis != null || input.overlay == TvPlayerOverlay.Hidden -> rootFocus.requestFocus()
-            input.overlay == TvPlayerOverlay.Controls -> restoreFocus.requestFocus()
-        }
-    }
-    LaunchedEffect(input.overlay, input.previewMillis, activity, playback.isPlaying, error) {
-        if (input.overlay == TvPlayerOverlay.Controls && input.previewMillis == null && playback.isPlaying && !error) {
-            delay(5000)
-            input = input.copy(overlay = TvPlayerOverlay.Hidden)
-        }
-    }
-    TvPlaybackLifecycle(vm, page) { menu(TvPlayerOverlay.Controls) }
+    TvPlaybackLifecycle(vm, page) { input = input.copy(overlay = TvPlayerOverlay.Controls, previewMillis = null) }
     if (playback.playWhenReady) ScreenOnEffect()
-    Box(
-        Modifier.fillMaxSize().background(Color.Black).testTag("tv-player")
-            .onPreviewKeyEvent { event ->
-                activity++
-                val key = when (event.key) {
-                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> TvPlayerKey.Confirm
-                    Key.DirectionLeft -> TvPlayerKey.Left
-                    Key.DirectionRight -> TvPlayerKey.Right
-                    Key.DirectionUp -> TvPlayerKey.Up
-                    Key.DirectionDown -> TvPlayerKey.Down
-                    else -> return@onPreviewKeyEvent false
+    TvPlayerChrome(
+        state = TvPlayerUiState(
+            title = page?.subjectPresentation?.title.orEmpty(),
+            episodeTitle = page?.episodePresentation?.title.orEmpty(),
+            positionMillis = position,
+            durationMillis = properties?.durationMillis ?: 0L,
+            playWhenReady = playback.playWhenReady,
+            isPlaying = playback.isPlaying,
+            status = status,
+            sourceName = selection?.selectedWebSource?.let { source ->
+                listOfNotNull(source.name, selection.selectedWebSourceChannel?.name).joinToString(" · ")
+            } ?: selection?.selected?.originalTitle.orEmpty(),
+            hasNextEpisode = vm.episodeSelectorState.hasNextEpisode,
+            mediaKey = "${page?.episodePresentation?.episodeId}:$selectedMedia",
+        ),
+        input = input,
+        onInputChange = { input = it },
+        onTogglePlayback = {
+            when {
+                vm.player.state.value.mediaStatus == MediaStatus.Ended -> {
+                    vm.player.seekTo(0)
+                    vm.player.play()
                 }
-                val native = event.nativeKeyEvent
-                val result = tvPlayerInput(input, key, event.type == KeyEventType.KeyDown, native.repeatCount, native.eventTime - native.downTime, position, duration)
-                if (input.overlay == TvPlayerOverlay.Hidden && input.previewMillis == null) restoreFocus = playFocus
-                input = result.state
-                result.seekToMillis?.let(vm.player::seekTo)
-                result.consumed
-            }.focusRequester(rootFocus).focusable(),
+                vm.player.state.value.playWhenReady -> vm.player.pause()
+                else -> vm.player.play()
+            }
+        },
+        onSeek = vm.player::seekTo,
+        onNextEpisode = { if (vm.episodeSelectorState.hasNextEpisode) vm.episodeSelectorState.selectNext() },
+        onRetry = ::retry,
+        onBack = onBack,
     ) {
         VideoPlayer(vm.player, Modifier.fillMaxSize())
-        if (page?.danmakuEnabled == true) PlayerDanmakuHost(vm.player, vm.danmakuHostState, vm.uiDanmakuEventFlow, Modifier.fillMaxSize())
-        if (input.previewMillis != null) {
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = .88f)).padding(40.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("预览进度 ${tvTime(input.previewMillis ?: 0)} / ${tvTime(duration)}", fontSize = 28.sp)
-                Text("左右调整 · 确认跳转 · 返回取消", fontSize = 20.sp)
-            }
-        } else if (input.overlay == TvPlayerOverlay.Controls) {
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha = .88f)).padding(horizontal = 40.dp, vertical = 28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("${page?.subjectPresentation?.title.orEmpty()} · ${page?.episodePresentation?.title.orEmpty()}", fontSize = 24.sp, maxLines = 1)
-                Text("${tvTime(position)} / ${tvTime(duration)}", fontSize = 20.sp)
-                if (error) Text("播放遇到问题，请重试或选择其他资源。", color = Color(0xFFFFB4AB))
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    TvButton(if (playback.playWhenReady) "暂停" else "播放", { if (vm.player.state.value.playWhenReady) vm.player.pause() else vm.player.play() }, Modifier.focusRequester(playFocus).testTag("tv-play-pause"))
-                    TvButton("进度", { restoreFocus = progressFocus; input = input.copy(previewMillis = position.coerceIn(0, duration), previewOrigin = TvPlayerOverlay.Controls) }, Modifier.focusRequester(progressFocus), enabled = duration > 0)
-                    TvButton("选集", { menu(TvPlayerOverlay.Episodes) }, Modifier.focusRequester(menuFocus.getValue(TvPlayerOverlay.Episodes)))
-                    TvButton("下一集", { if (vm.episodeSelectorState.hasNextEpisode) vm.episodeSelectorState.selectNext() }, enabled = vm.episodeSelectorState.hasNextEpisode)
-                    TvButton("资源", { menu(TvPlayerOverlay.Sources) }, Modifier.focusRequester(menuFocus.getValue(TvPlayerOverlay.Sources)).testTag("tv-player-sources"))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    TvButton("字幕", { menu(TvPlayerOverlay.Subtitles) }, Modifier.focusRequester(menuFocus.getValue(TvPlayerOverlay.Subtitles)))
-                    TvButton("音轨", { menu(TvPlayerOverlay.Audio) }, Modifier.focusRequester(menuFocus.getValue(TvPlayerOverlay.Audio)))
-                    TvButton("倍速", { menu(TvPlayerOverlay.Speed) }, Modifier.focusRequester(menuFocus.getValue(TvPlayerOverlay.Speed)))
-                    TvButton(if (page?.danmakuEnabled == true) "关闭弹幕" else "开启弹幕", { vm.setDanmakuEnabled(page?.danmakuEnabled != true) })
-                    TvButton("重试", {
-                        val loadError = page?.loadError
-                        if (loadError != null) vm.retryLoad(loadError)
-                        else scope.launch {
-                            vm.switchEpisode(vm.episodeSelectorState.current?.episodeId ?: initialEpisodeId)
-                        }
-                    })
-                    TvButton("退出", onBack)
-                }
-                if (duration <= 0) Text("当前资源尚未提供可跳转的时长。")
-            }
-        } else if (!playback.isPlaying && input.overlay == TvPlayerOverlay.Hidden) {
-            Text(
-                if (error) "播放失败 · 按确认键重试或换源" else if (playback.mediaStatus == MediaStatus.Ended) "本集播放结束 · 按确认键选集" else if (playback.mediaStatus == MediaStatus.Ready && !playback.playWhenReady) "已暂停 · 按确认键打开控制菜单" else "正在准备播放 · 按确认键打开控制菜单",
-                Modifier.align(Alignment.Center).background(Color.Black.copy(alpha = .75f)).padding(24.dp), fontSize = 22.sp,
-            )
+        if (page?.danmakuEnabled == true) {
+            PlayerDanmakuHost(vm.player, vm.danmakuHostState, vm.uiDanmakuEventFlow, Modifier.fillMaxSize())
         }
     }
-    when (input.overlay) {
-        TvPlayerOverlay.Sources -> TvSourceMenu(vm, page, ::back) { input = input.copy(overlay = TvPlayerOverlay.Hidden) }
-        TvPlayerOverlay.Episodes -> TvPlayerMenu("选集", ::back) {
-            if (vm.episodeSelectorState.items.isEmpty()) item { Text("正在加载剧集…") }
-            items(vm.episodeSelectorState.items, key = { it.episodeId }) { episode ->
-                TvButton("${episode.ep.ifBlank { episode.sort }} · ${episode.title}${if (episode.episodeId == vm.episodeSelectorState.current?.episodeId) " · 正在播放" else ""}", {
-                    vm.episodeSelectorState.select(episode)
-                    input = input.copy(overlay = TvPlayerOverlay.Hidden)
-                }, enabled = episode.isKnownBroadcast)
+    // 各面板拥有独立的滚动和焦点作用域.
+    key(input.overlay) {
+        when (input.overlay) {
+            TvPlayerOverlay.Sources -> TvSourceMenu(vm, selector, selection, statistics.mediaSourceLoading, ::back) {
+                input = input.copy(overlay = TvPlayerOverlay.Hidden)
             }
+            TvPlayerOverlay.Episodes -> TvPlayerOptionPanel(
+                title = "选集",
+                options = vm.episodeSelectorState.items.map { episode ->
+                    TvPlayerOption(
+                        id = episode.episodeId.toString(),
+                        title = "${episode.ep.ifBlank { episode.sort }} · ${episode.title}",
+                        detail = if (episode.isKnownBroadcast) "" else "尚未播出",
+                        selected = episode.episodeId == vm.episodeSelectorState.current?.episodeId,
+                        enabled = episode.isKnownBroadcast,
+                    )
+                },
+                message = if (vm.episodeSelectorState.items.isEmpty()) "正在加载剧集…" else null,
+                onBack = ::back,
+                onSelect = { id ->
+                    vm.episodeSelectorState.items.firstOrNull { it.episodeId.toString() == id }?.let {
+                        vm.episodeSelectorState.select(it)
+                        input = input.copy(overlay = TvPlayerOverlay.Hidden)
+                    }
+                },
+            )
+            TvPlayerOverlay.Options -> TvPlayerOptionPanel(
+                title = "播放设置",
+                options = listOf(
+                    TvPlayerOption("subtitles", "字幕"),
+                    TvPlayerOption("audio", "音轨"),
+                    TvPlayerOption("speed", "播放速度", "当前 ${speed}×", enabled = speedFeature != null),
+                    TvPlayerOption("danmaku", if (page?.danmakuEnabled == true) "关闭弹幕" else "开启弹幕"),
+                    TvPlayerOption("retry", "重新加载本集", "重新打开当前剧集的播放会话"),
+                    TvPlayerOption("exit", "退出播放"),
+                ),
+                initialOptionId = moreOption,
+                onBack = ::back,
+                onSelect = { id ->
+                    moreOption = id
+                    when (id) {
+                        "subtitles" -> input = input.copy(overlay = TvPlayerOverlay.Subtitles)
+                        "audio" -> input = input.copy(overlay = TvPlayerOverlay.Audio)
+                        "speed" -> input = input.copy(overlay = TvPlayerOverlay.Speed)
+                        "danmaku" -> vm.setDanmakuEnabled(page?.danmakuEnabled != true)
+                        "retry" -> retry()
+                        "exit" -> onBack()
+                    }
+                },
+            )
+            TvPlayerOverlay.Subtitles -> TvSubtitleMenu(vm, ::back)
+            TvPlayerOverlay.Audio -> TvAudioMenu(vm, ::back)
+            TvPlayerOverlay.Speed -> TvPlayerOptionPanel(
+                title = "播放速度",
+                options = (listOf(.5f, .75f, 1f, 1.25f, 1.5f, 2f) + speed).distinct().sorted().map { value ->
+                    TvPlayerOption(value.toString(), "${value}×", selected = value == speed, enabled = value in vm.playbackSpeedRange)
+                },
+                onBack = ::back,
+                onSelect = { vm.setPlaybackSpeed(it.toFloat()); back() },
+            )
+            else -> Unit
         }
-        TvPlayerOverlay.Subtitles -> TvSubtitleMenu(vm, ::back)
-        TvPlayerOverlay.Audio -> TvAudioMenu(vm, ::back)
-        TvPlayerOverlay.Speed -> TvPlayerMenu("播放速度", ::back) {
-            items(listOf(.5f, .75f, 1f, 1.25f, 1.5f, 2f)) { speed ->
-                TvButton("${speed}x", { vm.setPlaybackSpeed(speed); back() }, enabled = speed in vm.playbackSpeedRange)
-            }
-        }
-        else -> Unit
     }
 }
 
@@ -253,43 +243,68 @@ private fun TvPlaybackLifecycle(vm: EpisodeViewModel, page: EpisodePageState?, o
 }
 
 @Composable
-private fun TvPlayerMenu(title: String, onBack: () -> Unit, content: LazyListScope.() -> Unit) {
-    Dialog(onDismissRequest = onBack, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        TvPage(title, onBack, Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
+private fun TvSourceMenu(
+    vm: EpisodeViewModel,
+    selector: MediaSelectorState?,
+    state: MediaSelectorState.Presentation?,
+    isQuerying: Boolean,
+    onBack: () -> Unit,
+    onSelected: () -> Unit,
+) {
+    val mediaById = mutableMapOf<String, Media>()
+    val options = buildList {
+        add(TvPlayerOption("refresh", "重新查询全部资源"))
+        state?.webSources?.forEach { source ->
+            val sourceStatus = when {
+                source.isResolvingCaptcha -> "正在处理网页验证"
+                source.isCaptchaRequired -> "需要网页验证，可选择其他来源"
+                source.isRateLimited -> "请求频繁，正在等待重试"
+                source.isLoading -> "正在查询"
+                source.isError -> "查询失败"
+                source.channels.none { it.original != null } -> "未找到本集资源"
+                else -> "${source.channels.count { it.original != null }} 条可用线路"
+            }
+            source.channels.forEachIndexed { index, channel ->
+                val media = channel.original
+                val id = "channel:${source.instanceId}:$index:${media?.mediaId.orEmpty()}"
+                if (media != null) mediaById[id] = media
+                add(
+                    TvPlayerOption(
+                        id = id,
+                        title = "${source.name} · ${channel.name}",
+                        detail = media?.let { listOf(it.properties.resolution, sourceStatus).filter(String::isNotBlank).joinToString(" · ") }
+                            ?: "此线路暂无本集资源",
+                        selected = media != null && media.mediaId == state.selected?.mediaId,
+                        enabled = media != null,
+                    ),
+                )
+            }
+            add(TvPlayerOption("source:${source.instanceId}", "重查 ${source.name}", sourceStatus))
         }
+        state?.filteredCandidates?.mapNotNull { it.result }?.distinctBy { it.mediaId }
+            ?.filter { candidate -> mediaById.values.none { it.mediaId == candidate.mediaId } }
+            ?.forEach { media ->
+                val id = "media:${media.mediaId}"
+                mediaById[id] = media
+                add(TvPlayerOption(id, media.originalTitle, media.properties.resolution, selected = media.mediaId == state.selected?.mediaId))
+            }
     }
-}
-
-@Composable
-private fun TvSourceMenu(vm: EpisodeViewModel, page: EpisodePageState?, onBack: () -> Unit, onSelected: () -> Unit) {
-    val selector = page?.mediaSelectorState
-    val state = selector?.presentationFlow?.collectAsStateWithLifecycle()?.value
-    TvPlayerMenu("选择播放资源", onBack) {
-        item { TvButton("重新查询全部资源", vm::refreshFetch) }
-        if (state == null || state.isPlaceholder) item { Text("正在加载资源…") }
-        if (state != null && selector != null) {
-            state.webSources.forEach { source ->
-                item(key = "source-${source.instanceId}") {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(source.name + when { source.isCaptchaRequired -> " · 需要网页验证，请尝试其他来源"; source.isLoading -> " · 查询中"; source.isError -> " · 查询失败"; else -> "" })
-                        TvButton("重试 ${source.name}", { vm.restartSource(source.instanceId) })
-                    }
-                }
-                items(source.channels, key = { "${source.instanceId}-${it.name}" }) { channel ->
-                    TvButton("${source.name} · ${channel.name}", { channel.original?.let(selector::select); onSelected() }, enabled = channel.original != null)
-                }
+    TvPlayerOptionPanel(
+        title = "播放资源", options = options,
+        message = tvPlayerSourceMenuMessage(
+            isPlaceholder = state == null || state.isPlaceholder,
+            isQuerying = isQuerying || state?.webSources?.any { it.isLoading } == true,
+            hasAvailableMedia = mediaById.isNotEmpty(),
+        ),
+        onBack = onBack,
+        onSelect = { id ->
+            when {
+                id == "refresh" -> vm.refreshFetch()
+                id.startsWith("source:") -> vm.restartSource(id.removePrefix("source:"))
+                else -> mediaById[id]?.let { media -> selector?.select(media); onSelected() }
             }
-            val candidates = state.filteredCandidates.mapNotNull { it.result }.distinctBy { it.mediaId }
-                .filter { candidate -> state.webSources.none { source -> source.channels.any { it.original?.mediaId == candidate.mediaId } } }
-            items(candidates, key = { "media-${it.mediaId}" }) { media ->
-                TvButton(media.originalTitle, { selector.select(media); onSelected() })
-            }
-            if (candidates.isEmpty() && state.webSources.none { it.channels.any { channel -> channel.original != null } }) {
-                item { Text("暂无可播放资源。可重试查询，或返回设置检查数据源订阅。") }
-            }
-        }
-    }
+        },
+    )
 }
 
 @Composable
@@ -297,13 +312,16 @@ private fun TvSubtitleMenu(vm: EpisodeViewModel, onBack: () -> Unit) {
     val tracks = vm.player.subtitleTracks
     val candidates = tracks?.candidates?.collectAsStateWithLifecycle(emptyList())?.value.orEmpty()
     val selected = tracks?.selected?.collectAsStateWithLifecycle()?.value
-    TvPlayerMenu("字幕", onBack) {
-        item { TvButton("关闭字幕", { tracks?.select(null); onBack() }, enabled = tracks != null) }
-        if (candidates.isEmpty()) item { Text("此资源暂无可选字幕轨道。") }
-        items(candidates, key = { it.id }) { track ->
-            TvButton("${if (selected?.id == track.id) "✓ " else ""}${track.subtitleLanguage}", { tracks?.select(track); onBack() })
-        }
-    }
+    TvPlayerOptionPanel(
+        title = "字幕",
+        initialOptionId = selected?.id?.toString() ?: "off".takeIf { tracks != null },
+        options = listOf(TvPlayerOption("off", "关闭字幕", selected = selected == null, enabled = tracks != null)) + candidates.map { track ->
+            TvPlayerOption(track.id.toString(), track.subtitleLanguage, selected = selected?.id == track.id)
+        },
+        message = if (candidates.isEmpty()) "此资源暂无可选字幕轨道。" else null,
+        onBack = onBack,
+        onSelect = { id -> tracks?.select(candidates.firstOrNull { it.id.toString() == id }); onBack() },
+    )
 }
 
 @Composable
@@ -311,12 +329,14 @@ private fun TvAudioMenu(vm: EpisodeViewModel, onBack: () -> Unit) {
     val tracks = vm.player.audioTracks
     val candidates = tracks?.candidates?.collectAsStateWithLifecycle(emptyList())?.value.orEmpty()
     val selected = tracks?.selected?.collectAsStateWithLifecycle()?.value
-    TvPlayerMenu("音轨", onBack) {
-        if (candidates.isEmpty()) item { Text("此资源暂无可选音轨。") }
-        items(candidates, key = { it.id }) { track ->
-            TvButton("${if (selected?.id == track.id) "✓ " else ""}${track.audioName}", { tracks?.select(track); onBack() })
-        }
-    }
+    TvPlayerOptionPanel(
+        title = "音轨",
+        initialOptionId = selected?.id?.toString(),
+        options = candidates.map { track -> TvPlayerOption(track.id.toString(), track.audioName, selected = selected?.id == track.id) },
+        message = if (candidates.isEmpty()) "此资源暂无可选音轨。" else null,
+        onBack = onBack,
+        onSelect = { id -> candidates.firstOrNull { it.id.toString() == id }?.let { tracks?.select(it) }; onBack() },
+    )
 }
 
 internal fun tvTime(millis: Long): String {

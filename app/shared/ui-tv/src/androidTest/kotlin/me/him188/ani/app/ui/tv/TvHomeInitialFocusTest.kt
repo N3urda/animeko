@@ -29,6 +29,26 @@ import org.junit.Test
 @OptIn(ExperimentalTestApi::class)
 class TvHomeInitialFocusTest {
     @Test
+    fun loadingHomeHasAnImmediatelyUsableSearchTarget() = runAniComposeUiTest {
+        setContent { TvTheme { HomeFocusHarness(null, false) } }
+        onNodeWithTag("home-search").assertIsFocused()
+    }
+
+    @Test
+    fun confirmingSearchPreventsLateContentFromStealingFocus() = runAniComposeUiTest {
+        var followed by mutableStateOf<String?>(null)
+        var ready by mutableStateOf(false)
+        setContent { TvTheme { HomeFocusHarness(followed, ready) } }
+        onNodeWithTag("home-search").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        onNodeWithTag("home-search").performKeyInput {
+            keyDown(Key.DirectionCenter)
+            keyUp(Key.DirectionCenter)
+        }
+        runOnIdle { followed = "followed:8"; ready = true }
+        onNodeWithTag("home-search").assertIsFocused()
+    }
+
+    @Test
     fun followedContentWinsAfterItFinishesLoading() = runAniComposeUiTest {
         var followed by mutableStateOf<String?>(null)
         var ready by mutableStateOf(false)

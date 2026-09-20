@@ -10,9 +10,11 @@
 package me.him188.ani.app.ui.tv
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -43,18 +45,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRestorer
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.Border
 import androidx.tv.material3.Card
+import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import kotlinx.coroutines.flow.first
@@ -68,11 +73,32 @@ fun TvButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    selected: Boolean = false,
 ) {
-    Button(onClick = onClick, modifier = modifier.heightIn(min = 48.dp).focusProperties { canFocus = enabled }, enabled = enabled) {
-        Text(text, fontSize = 18.sp, maxLines = 1)
+    Button(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 48.dp).focusProperties { canFocus = enabled }
+            .semantics { this.selected = selected },
+        enabled = enabled,
+        shape = ButtonDefaults.shape(RoundedCornerShape(12.dp)),
+        scale = ButtonDefaults.scale(focusedScale = 1.02f, pressedScale = 1f),
+        colors = ButtonDefaults.colors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+            focusedContainerColor = MaterialTheme.colorScheme.primary,
+            focusedContentColor = MaterialTheme.colorScheme.onPrimary,
+        ),
+    ) {
+        Text(text, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
+
+@Composable
+internal fun tvCardBorder() = CardDefaults.border(
+    focusedBorder = Border(BorderStroke(2.dp, MaterialTheme.colorScheme.primary), shape = RoundedCornerShape(12.dp)),
+)
+
+internal fun tvCardScale() = CardDefaults.scale(focusedScale = 1f, pressedScale = .98f)
 
 @Composable
 fun TvPage(
@@ -85,22 +111,24 @@ fun TvPage(
 ) {
     CompositionLocalProvider(LocalTvFocusState provides focusState) {
         TvRestorePageFocus(focusState)
-        Column(
-            modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
-                .onPreviewKeyEvent { focusState.onNavigationKey(it); false }
-                .padding(horizontal = 48.dp, vertical = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(22.dp),
-        ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(18.dp),
+        BoxWithConstraints(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            val horizontalPadding = if (maxWidth < 800.dp) 32.dp else 48.dp
+            Column(
+                Modifier.fillMaxSize().onPreviewKeyEvent { focusState.onNavigationKey(it); false }
+                    .padding(horizontal = horizontalPadding, vertical = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                if (onBack != null) TvButton("返回", onBack, Modifier.tvFocusTarget("page-back", focusState).testTag("tv-back"))
-                Text(title, Modifier.weight(1f), fontSize = 28.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                actions()
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(18.dp),
+                ) {
+                    if (onBack != null) TvButton("返回", onBack, Modifier.tvFocusTarget("page-back", focusState).testTag("tv-back"))
+                    Text(title, Modifier.weight(1f), fontSize = 28.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    actions()
+                }
+                content()
             }
-            content()
         }
     }
 }
@@ -137,37 +165,56 @@ internal fun TvPosterCard(
     poster: TvPoster,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
     if (poster.nsfwMode == NsfwMode.HIDE) return
     var revealed by rememberSaveable(poster.id, poster.nsfwMode) { mutableStateOf(false) }
     val masked = poster.nsfwMode == NsfwMode.BLUR && !revealed
-    var focused by remember { mutableStateOf(false) }
     Card(
         onClick = { if (masked) revealed = true else onClick() },
-        modifier = modifier.width(156.dp).onFocusChanged { focused = it.isFocused }
-            .border(
-                if (focused) 3.dp else 0.dp,
-                if (focused) MaterialTheme.colorScheme.primary else Color.Transparent,
-                RoundedCornerShape(12.dp),
-            ).testTag("tv-subject-${poster.id}"),
+        modifier = modifier.width(if (compact) 240.dp else 148.dp).testTag("tv-subject-${poster.id}"),
+        shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
+        scale = tvCardScale(),
+        border = tvCardBorder(),
     ) {
-        Column {
-            Box(
-                Modifier.fillMaxWidth().height(206.dp).background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (masked || poster.imageUrl.isNullOrBlank()) {
-                    Text(if (masked) "内容已遮盖" else "Animeko", fontSize = 18.sp)
-                } else {
-                    AsyncImage(poster.imageUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                }
+        if (compact) {
+            Row(Modifier.height(144.dp), verticalAlignment = Alignment.CenterVertically) {
+                TvPosterCover(poster, masked, Modifier.width(96.dp).height(144.dp))
+                TvPosterCaption(poster, masked, Modifier.weight(1f).padding(12.dp))
             }
-            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(if (masked) "按确认键临时显示" else poster.title, fontSize = 18.sp, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (!masked && poster.subtitle.isNotBlank()) {
-                    Text(poster.subtitle, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
+        } else {
+            Column {
+                TvPosterCover(poster, masked, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
+                TvPosterCaption(poster, masked, Modifier.fillMaxWidth().padding(10.dp))
             }
+        }
+    }
+}
+
+@Composable
+private fun TvPosterCover(poster: TvPoster, masked: Boolean, modifier: Modifier) {
+    Box(
+        modifier.background(MaterialTheme.colorScheme.surfaceVariant).testTag("tv-subject-cover-${poster.id}"),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (masked || poster.imageUrl.isNullOrBlank()) {
+            Text(if (masked) "内容已遮盖" else "Animeko", fontSize = 18.sp)
+        } else {
+            AsyncImage(poster.imageUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        }
+    }
+}
+
+@Composable
+private fun TvPosterCaption(poster: TvPoster, masked: Boolean, modifier: Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            if (masked) "按确认键临时显示" else poster.title,
+            Modifier.testTag("tv-subject-title-${poster.id}"),
+            fontSize = 18.sp, lineHeight = 23.sp, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis,
+        )
+        if (!masked && poster.subtitle.isNotBlank()) {
+            Text(poster.subtitle, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -235,45 +282,48 @@ internal fun <T : Any> TvPosterGrid(
         }
         recoveryFinished = true
     }
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(156.dp),
-        modifier = modifier.fillMaxSize().focusRestorer(),
-        state = gridState,
-        contentPadding = PaddingValues(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
-        verticalArrangement = Arrangement.spacedBy(28.dp),
-    ) {
-        if (entries.isEmpty() && !hasError) {
-            item(key = if (canLoadMore) moreKey else "${focusGroup}empty", span = { GridItemSpan(maxLineSpan) }) {
-                when {
-                    !ready -> TvMessage("正在加载…")
-                    canLoadMore -> TvMessage(
-                        "当前页没有可显示的番剧", actionLabel = "加载更多",
-                        onAction = { items[items.itemCount - 1] },
-                        actionModifier = Modifier.tvFocusTarget(moreKey, focusState),
-                    )
-                    else -> TvMessage(emptyTitle)
+    BoxWithConstraints(modifier.fillMaxSize().testTag("tv-poster-grid-viewport")) {
+        val compact = maxHeight < 320.dp
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(if (compact) 240.dp else 128.dp),
+            modifier = Modifier.fillMaxSize().focusRestorer(),
+            state = gridState,
+            contentPadding = PaddingValues(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            verticalArrangement = Arrangement.spacedBy(28.dp),
+        ) {
+            if (entries.isEmpty() && !hasError) {
+                item(key = if (canLoadMore) moreKey else "${focusGroup}empty", span = { GridItemSpan(maxLineSpan) }) {
+                    when {
+                        !ready -> TvMessage("正在加载…")
+                        canLoadMore -> TvMessage(
+                            "当前页没有可显示的番剧", actionLabel = "加载更多",
+                            onAction = { items[items.itemCount - 1] },
+                            actionModifier = Modifier.tvFocusTarget(moreKey, focusState),
+                        )
+                        else -> TvMessage(emptyTitle)
+                    }
                 }
             }
-        }
-        items(entries, key = { "$focusGroup${it.id}" }) { entry ->
-            items[entry.pagingIndex]
-            TvPosterCard(
-                entry.poster, { onSubject(entry.poster.id) },
-                Modifier.tvFocusTarget("$focusGroup${entry.id}", focusState),
-            )
-        }
-        if (hasError) {
-            item(key = retryKey, span = { GridItemSpan(maxLineSpan) }) {
-                TvMessage(
-                    "加载失败", "请检查网络后重试。", "重试",
-                    onAction = { focusState.requestFocus(focusGroup); items.retry() },
-                    actionModifier = Modifier.tvFocusTarget(retryKey, focusState),
+            items(entries, key = { "$focusGroup${it.id}" }) { entry ->
+                items[entry.pagingIndex]
+                TvPosterCard(
+                    entry.poster, { onSubject(entry.poster.id) },
+                    Modifier.tvFocusTarget("$focusGroup${entry.id}", focusState), compact = compact,
                 )
             }
-        }
-        if (items.loadState.append is LoadState.Loading) {
-            item(key = "${focusGroup}loading", span = { GridItemSpan(maxLineSpan) }) { TvMessage("正在加载更多…") }
+            if (hasError) {
+                item(key = retryKey, span = { GridItemSpan(maxLineSpan) }) {
+                    TvMessage(
+                        "加载失败", "请检查网络后重试。", "重试",
+                        onAction = { focusState.requestFocus(focusGroup); items.retry() },
+                        actionModifier = Modifier.tvFocusTarget(retryKey, focusState),
+                    )
+                }
+            }
+            if (items.loadState.append is LoadState.Loading) {
+                item(key = "${focusGroup}loading", span = { GridItemSpan(maxLineSpan) }) { TvMessage("正在加载更多…") }
+            }
         }
     }
 }

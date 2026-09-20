@@ -9,20 +9,17 @@
 
 package me.him188.ani.app.ui.tv
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,9 +29,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -95,14 +94,17 @@ private fun TvSubjectContent(
     val collection by collectionState.presentationFlow.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val focus = LocalTvFocusState.current
-    val grid = rememberLazyGridState()
     val nsfwMode = rememberTvNsfwMode()
     var collectionError by remember { mutableStateOf(false) }
-    var expandedSummary by rememberSaveable { mutableStateOf(false) }
     val episodes = presentation.episodeListUiState
     val info = state.info
     var revealed by rememberSaveable(state.subjectId, nsfwMode) { mutableStateOf(false) }
-    if (info?.nsfw == true && nsfwMode != NsfwMode.DISPLAY && !revealed) {
+    if (info == null) {
+        TvStaticFocusGroup(focus, "subject:", emptyList(), ready = false)
+        TvMessage("正在加载番剧…")
+        return
+    }
+    if (info.nsfw && nsfwMode != NsfwMode.DISPLAY && !revealed) {
         TvStaticFocusGroup(focus, "subject:", if (nsfwMode == NsfwMode.BLUR) listOf("subject:reveal") else emptyList())
         TvMessage(
             "内容已按偏好隐藏",
@@ -112,52 +114,37 @@ private fun TvSubjectContent(
         )
         return
     }
-    val playId = state.subjectProgressState.episodeIdToPlay
-        ?: episodes.mainEpisodes.firstOrNull { it.isBroadcast }?.episodeId
-    val targets = buildList {
-        if (playId != null) add("subject:play" to 0)
-        if (info != null) add("subject:summary" to 0)
-        if (canCollect && !collection.isSetSelfCollectionTypeWorking) add("subject:collection" to 0)
-        episodes.mainEpisodes.forEachIndexed { index, episode -> add("subject:episode-${episode.episodeId}" to index + 2) }
-        val otherStart = 3 + episodes.mainEpisodes.size
-        episodes.otherEpisodes.forEachIndexed { index, episode -> add("subject:episode-${episode.episodeId}" to otherStart + index) }
+    val playEpisode = tvCataloguePlaybackEpisode(episodes, state.subjectProgressState.episodeIdToPlay)
+    val headerFocusKeys = buildList {
+        if (playEpisode != null) add("subject:play")
+        if (canCollect && !collection.isSetSelfCollectionTypeWorking) add("subject:collection")
+        if (info.summary.isNotBlank()) add("subject:summary")
     }
-    TvLazyFocusGroup(
-        focus, "subject:", targets.map { it.first }, !episodes.isPlaceholder, "page-back",
-        scrollToItem = { grid.scrollToItem(targets[it].second) },
-        isItemVisible = { key ->
-            val index = targets.firstOrNull { it.first == key }?.second
-            grid.layoutInfo.visibleItemsInfo.any { it.index == index }
-        },
-    )
-    LazyVerticalGrid(
-        GridCells.Adaptive(220.dp),
-        Modifier.fillMaxSize().focusRestorer(),
-        state = grid,
-        contentPadding = PaddingValues(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(22.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
-        item(key = "info", span = { GridItemSpan(maxLineSpan) }) {
+    TvCatalogueEpisodeGrid(episodes, playEpisode?.episodeId, headerFocusKeys, onEpisode) {
+        Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                if (info != null && (!info.nsfw || nsfwMode == NsfwMode.DISPLAY || revealed)) {
-                    AsyncImage(info.imageLarge, null, Modifier.size(156.dp, 218.dp), contentScale = ContentScale.Crop)
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text(info?.displayName ?: presentation.displayName, fontSize = 30.sp)
-                    if (info != null) {
-                        Text("评分 ${info.ratingInfo.score}  ·  ${info.airDate}", fontSize = 18.sp)
-                        Text(
-                            info.summary.ifBlank { "暂无简介" },
-                            fontSize = 18.sp,
-                            maxLines = if (expandedSummary) Int.MAX_VALUE else 4,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        TvButton(if (expandedSummary) "收起简介" else "展开简介", { expandedSummary = !expandedSummary }, Modifier.tvFocusTarget("subject:summary", focus))
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                        if (playId != null) TvButton("继续 / 开始观看", { onEpisode(playId) }, Modifier.tvFocusTarget("subject:play", focus))
+                AsyncImage(
+                    info.imageLarge, null,
+                    Modifier.width(156.dp).aspectRatio(2f / 3f),
+                    contentScale = ContentScale.Fit,
+                )
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text(info.displayName, fontSize = 28.sp, lineHeight = 36.sp)
+                    Text(
+                        buildList {
+                            add(if (info.ratingInfo.total > 0) "评分 ${info.ratingInfo.score}" else "暂无评分")
+                            if (info.airDate.isValid) add("${info.airDate} 开播")
+                        }.joinToString(" · "),
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        if (playEpisode != null) {
+                            TvButton(
+                                tvCataloguePlaybackLabel(playEpisode), { onEpisode(playEpisode.episodeId) },
+                                Modifier.tvFocusTarget("subject:play", focus).testTag("tv-subject-play"),
+                            )
+                        } else Text(if (episodes.isPlaceholder) "正在读取播放进度…" else "暂无已播出剧集", fontSize = 18.sp)
                         TvButton(
                             when {
                                 !canCollect -> "登录后可收藏"
@@ -175,40 +162,61 @@ private fun TvSubjectContent(
                             modifier = Modifier.tvFocusTarget("subject:collection", focus),
                         )
                     }
+                    if (info.summary.isNotBlank()) TvCatalogueSummaryButton(info.displayName, info.summary)
                     if (collectionError) Text("收藏操作失败，请重试。", color = MaterialTheme.colorScheme.error, fontSize = 18.sp)
                 }
             }
-        }
-        item(key = "episodes-title", span = { GridItemSpan(maxLineSpan) }) { Text("选择剧集", fontSize = 24.sp) }
-        if (episodes.isPlaceholder) {
-            item(key = "episodes-loading", span = { GridItemSpan(maxLineSpan) }) { TvMessage("正在加载剧集…") }
-        } else if (episodes.mainEpisodes.isEmpty() && episodes.otherEpisodes.isEmpty()) {
-            item(key = "episodes-empty", span = { GridItemSpan(maxLineSpan) }) { TvMessage("暂时没有剧集信息") }
-        }
-        items(episodes.mainEpisodes, key = { "episode-${it.episodeId}" }) { episode ->
-            TvEpisodeCard(episode, { onEpisode(episode.episodeId) }, Modifier.tvFocusTarget("subject:episode-${episode.episodeId}", focus))
-        }
-        if (episodes.otherEpisodes.isNotEmpty()) {
-            item(key = "special-title", span = { GridItemSpan(maxLineSpan) }) { Text("特别篇 / 其他", fontSize = 24.sp) }
-            items(episodes.otherEpisodes, key = { "episode-${it.episodeId}" }) { episode ->
-                TvEpisodeCard(episode, { onEpisode(episode.episodeId) }, Modifier.tvFocusTarget("subject:episode-${episode.episodeId}", focus))
-            }
+
         }
     }
 }
 
 @Composable
+internal fun TvCatalogueSummaryButton(title: String, summary: String) {
+    val focus = LocalTvFocusState.current
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    TvButton(
+        "展开简介", { expanded = true },
+        Modifier.tvFocusTarget("subject:summary", focus).testTag("tv-subject-summary"),
+    )
+    if (expanded) TvScrollableTextDialog(title, summary) {
+        expanded = false
+        focus.requestFocus("subject:summary")
+    }
+}
+
+@Composable
 internal fun TvEpisodeCard(episode: EpisodeListItem, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(onClick = onClick, modifier = modifier.fillMaxWidth().testTag("tv-episode-${episode.episodeId}")) {
-        Column(Modifier.fillMaxWidth().height(116.dp).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val status = when {
-                episode.isDoneOrDropped -> " · 已看"
-                !episode.isBroadcast -> " · 未播出"
-                episode.playProgress != null -> " · ${(episode.playProgress!! * 100).toInt()}%"
-                else -> ""
-            }
-            Text("${episode.ep ?: episode.sort}$status", fontSize = 20.sp, maxLines = 1)
-            Text(episode.nameCn.ifBlank { episode.name }, fontSize = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    val target = modifier.fillMaxWidth().testTag("tv-episode-${episode.episodeId}")
+    if (episode.isBroadcast) {
+        Card(onClick = onClick, modifier = target, border = tvCardBorder(), scale = tvCardScale()) {
+            TvEpisodeCardContent(episode)
         }
+    } else {
+        Box(
+            target.focusProperties { canFocus = false }.semantics { disabled() }
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),
+        ) {
+            TvEpisodeCardContent(episode)
+        }
+    }
+}
+
+@Composable
+private fun TvEpisodeCardContent(episode: EpisodeListItem) {
+    Column(Modifier.fillMaxWidth().height(116.dp).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        val status = when {
+            !episode.isBroadcast -> "未播出"
+            episode.collectionType == UnifiedCollectionType.DROPPED -> "已弃看"
+            episode.collectionType == UnifiedCollectionType.DONE -> "已看"
+            episode.playProgress != null -> "已播 ${(episode.playProgress!!.coerceIn(0f, 1f) * 100).toInt()}%"
+            else -> "可播放"
+        }
+        Text("${tvCatalogueEpisodeLabel(episode)} · $status", fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            episode.nameCn.ifBlank { episode.name }.ifBlank { "暂无剧集标题" },
+            fontSize = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

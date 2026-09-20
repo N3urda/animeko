@@ -29,6 +29,9 @@ fun TvTheme(content: @Composable () -> Unit) {
         colorScheme = mobileDarkColorScheme(
             background = background,
             surface = surface,
+            surfaceVariant = Color(0xFF202D40),
+            onSurface = Color(0xFFF1F4FA),
+            onSurfaceVariant = Color(0xFFBAC6D8),
             primary = primary,
         ),
     ) {
@@ -36,6 +39,9 @@ fun TvTheme(content: @Composable () -> Unit) {
             colorScheme = darkColorScheme(
                 background = background,
                 surface = surface,
+                surfaceVariant = Color(0xFF202D40),
+                onSurface = Color(0xFFF1F4FA),
+                onSurfaceVariant = Color(0xFFBAC6D8),
                 primary = primary,
                 onPrimary = Color(0xFF112745),
                 primaryContainer = Color(0xFF26466D),

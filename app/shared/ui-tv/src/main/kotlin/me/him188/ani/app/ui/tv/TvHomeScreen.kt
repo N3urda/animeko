@@ -10,6 +10,7 @@
 package me.him188.ani.app.ui.tv
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -65,31 +67,67 @@ fun TvHomeScreen(
         followed.loadState.refresh !is LoadState.Loading,
         trending.loadState.refresh !is LoadState.Loading,
     )
-    TvHomeRailFocus(focus, "trending:", trendingEntries, trending, outer, 0, trendingRow)
-    TvHomeRailFocus(focus, "followed:", followedEntries, followed, outer, 1, followedRow)
-    TvPage(
-        title = "Animeko TV", onBack = null, modifier = modifier, focusState = focus,
-        actions = {
-            TvButton("搜索", onSearch, Modifier.tvFocusTarget("home-search", focus))
-            TvButton("设置", onSettings, Modifier.tvFocusTarget("home-settings", focus))
-            TvButton("账号", onLogin, Modifier.tvFocusTarget("home-login", focus))
-        },
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            TvButton("我的收藏", onCollections, Modifier.tvFocusTarget("home-collections", focus))
-            TvButton("观看历史", onHistory, Modifier.tvFocusTarget("home-history", focus))
-        }
+    val hasFollowed = followedEntries.isNotEmpty()
+    val followedError = followed.loadState.refresh is LoadState.Error || followed.loadState.append is LoadState.Error
+    TvHomeRailFocus(focus, "trending:", trendingEntries, trending, outer, if (hasFollowed) 1 else 0, trendingRow)
+    TvHomeRailFocus(focus, "followed:", followedEntries, followed, outer, if (hasFollowed) 0 else 1, followedRow)
+    TvCatalogueHomeLayout(onSearch, onCollections, onHistory, onSettings, onLogin, focus, modifier) { compact ->
         LazyColumn(
             Modifier.fillMaxSize().focusRestorer(), state = outer,
             verticalArrangement = Arrangement.spacedBy(24.dp),
             contentPadding = PaddingValues(bottom = 20.dp),
         ) {
+            if (hasFollowed) item(key = "followed:") {
+                TvPosterRail("继续追番", followed, followedEntries, followedRow, focus, "followed:", onSubject, "", compact)
+            }
             item(key = "trending:") {
-                TvPosterRail("热门番剧", trending, trendingEntries, trendingRow, focus, "trending:", onSubject, "暂无热门番剧")
+                TvPosterRail("热门番剧", trending, trendingEntries, trendingRow, focus, "trending:", onSubject, "暂无热门番剧", compact)
             }
-            item(key = "followed:") {
-                TvPosterRail("继续追番", followed, followedEntries, followedRow, focus, "followed:", onSubject, "收藏正在追看的番剧后，会显示在这里")
+            if (!hasFollowed && followedError) item(key = "followed:") {
+                TvPosterRail("追番内容加载失败", followed, followedEntries, followedRow, focus, "followed:", onSubject, "", compact)
             }
+        }
+    }
+}
+
+/** 导航下方的实际可用高度决定海报布局, 让当前卡片和标题完整可见. */
+@Composable
+internal fun TvCatalogueHomeLayout(
+    onSearch: () -> Unit,
+    onCollections: () -> Unit,
+    onHistory: () -> Unit,
+    onSettings: () -> Unit,
+    onLogin: () -> Unit,
+    focus: TvFocusState,
+    modifier: Modifier = Modifier,
+    content: @Composable (compact: Boolean) -> Unit,
+) {
+    TvPage(title = "Animeko TV", onBack = null, modifier = modifier, focusState = focus) {
+        TvCatalogueHomeNavigation(onSearch, onCollections, onHistory, onSettings, onLogin, focus)
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().testTag("tv-home-content-viewport")) {
+            content(maxHeight < 350.dp)
+        }
+    }
+}
+
+@Composable
+internal fun TvCatalogueHomeNavigation(
+    onSearch: () -> Unit,
+    onCollections: () -> Unit,
+    onHistory: () -> Unit,
+    onSettings: () -> Unit,
+    onLogin: () -> Unit,
+    focus: TvFocusState,
+) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        listOf(
+            Triple("搜索", "home-search", onSearch),
+            Triple("我的收藏", "home-collections", onCollections),
+            Triple("观看历史", "home-history", onHistory),
+            Triple("设置", "home-settings", onSettings),
+            Triple("账号", "home-login", onLogin),
+        ).forEach { (label, key, action) ->
+            TvButton(label, action, Modifier.weight(1f).tvFocusTarget(key, focus).testTag(key))
         }
     }
 }
@@ -124,7 +162,7 @@ private fun <T : Any> TvHomeRailFocus(
 @Composable
 private fun <T : Any> TvPosterRail(
     title: String, pager: LazyPagingItems<T>, entries: List<TvRailPoster>, row: LazyListState,
-    focus: TvFocusState, group: String, onSubject: (Int) -> Unit, emptyTitle: String,
+    focus: TvFocusState, group: String, onSubject: (Int) -> Unit, emptyTitle: String, compact: Boolean,
 ) {
     val error = pager.loadState.refresh is LoadState.Error || pager.loadState.append is LoadState.Error
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -138,7 +176,10 @@ private fun <T : Any> TvPosterRail(
         ) {
             items(entries, key = { "$group${it.poster.id}" }) { entry ->
                 pager[entry.pagingIndex]
-                TvPosterCard(entry.poster, { onSubject(entry.poster.id) }, Modifier.tvFocusTarget("$group${entry.poster.id}", focus))
+                TvPosterCard(
+                    entry.poster, { onSubject(entry.poster.id) },
+                    Modifier.tvFocusTarget("$group${entry.poster.id}", focus), compact = compact,
+                )
             }
             if (error) item(key = "${group}retry") {
                 TvButton("重试", { focus.requestFocus(group); pager.retry() }, Modifier.tvFocusTarget("${group}retry", focus))
@@ -157,5 +198,5 @@ internal fun TvSetHomeInitialFocus(
     trendingReady: Boolean,
 ) {
     val target = tvHomeInitialFocus(followedKey, trendingKey, followedReady, trendingReady)
-    LaunchedEffect(target) { if (target != null) focus.requestInitialFocus(target) }
+    LaunchedEffect(target) { focus.requestInitialFocus(target ?: "home-search", provisional = target == null) }
 }

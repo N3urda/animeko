@@ -9,8 +9,8 @@
 
 package me.him188.ani.app.ui.tv
 
-enum class TvPlayerOverlay { Hidden, Controls, Sources, Episodes, Subtitles, Audio, Speed }
-enum class TvPlayerKey { Confirm, Left, Right, Up, Down }
+enum class TvPlayerOverlay { Hidden, Controls, Sources, Episodes, Options, Subtitles, Audio, Speed }
+enum class TvPlayerKey { Confirm, Left, Right, Up, Down, Menu }
 
 data class TvPlayerInputState(
     val overlay: TvPlayerOverlay = TvPlayerOverlay.Hidden,
@@ -26,6 +26,7 @@ data class TvPlayerInputResult(
     val consumed: Boolean = true,
     val seekToMillis: Long? = null,
     val exitPlayer: Boolean = false,
+    val togglePlayback: Boolean = false,
 )
 
 /** 预览只改变目标时间，确认时才提交一次 seek；菜单把方向键交还焦点系统。 */
@@ -48,7 +49,7 @@ fun tvPlayerInput(
         if (key == TvPlayerKey.Confirm) {
             return TvPlayerInputResult(
                 state.copy(overlay = TvPlayerOverlay.Controls, previewMillis = null, heldKey = key),
-                seekToMillis = state.previewMillis.coerceIn(0, durationMillis.coerceAtLeast(0)),
+                seekToMillis = state.previewMillis.takeIf { durationMillis > 0 }?.coerceIn(0, durationMillis),
             )
         }
         val direction = when (key) { TvPlayerKey.Left -> -1; TvPlayerKey.Right -> 1; else -> 0 }
@@ -60,12 +61,17 @@ fun tvPlayerInput(
         val target = positionMillis + if (key == TvPlayerKey.Left) -10000 else 10000
         return TvPlayerInputResult(state.copy(previewMillis = target.coerceIn(0, durationMillis), previewOrigin = state.overlay, heldKey = key))
     }
-    return TvPlayerInputResult(state.copy(overlay = TvPlayerOverlay.Controls, heldKey = key))
+    return TvPlayerInputResult(
+        state.copy(overlay = TvPlayerOverlay.Controls, heldKey = key),
+        togglePlayback = key == TvPlayerKey.Confirm,
+    )
 }
 
 fun tvPlayerBack(state: TvPlayerInputState): TvPlayerInputResult = when {
     state.previewMillis != null -> TvPlayerInputResult(state.copy(overlay = state.previewOrigin, previewMillis = null, heldKey = null))
     state.overlay == TvPlayerOverlay.Hidden -> TvPlayerInputResult(state, exitPlayer = true)
     state.overlay == TvPlayerOverlay.Controls -> TvPlayerInputResult(state.copy(overlay = TvPlayerOverlay.Hidden, heldKey = null))
+    state.overlay in listOf(TvPlayerOverlay.Subtitles, TvPlayerOverlay.Audio, TvPlayerOverlay.Speed) ->
+        TvPlayerInputResult(state.copy(overlay = TvPlayerOverlay.Options, heldKey = null))
     else -> TvPlayerInputResult(state.copy(overlay = TvPlayerOverlay.Controls, heldKey = null))
 }
