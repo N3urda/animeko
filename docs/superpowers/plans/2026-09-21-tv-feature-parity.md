@@ -12,7 +12,7 @@
 - [x] Search: implement TvSearchFilters.kt with a query draft, canonical tag groups, year/season/sort and apply/reset/cancel. Integrate TvSearchScreen with UpdateQuery; fix shared empty-query clearing only if required by a failing regression. Test tag-only requests, retained keyword, apply/cancel/reset, custom route tags and focus restoration.
 - [x] Authorization: route BangumiAuthorize, add account/login entry, implement TvBangumiAuthorizeScreen and request lifecycle, encode QR locally, and cover timeout/cancel/failure/success. Show QR only for the active request; browser failures do not destroy the QR flow. Test QR decode round-trip with a representative authorization URL.
 - [x] Validation: run full ui-tv unit/instrumented suites and any changed shared tests. Build three APKs, install over previous preview, inspect real recommendations, filter results and authorization QR; do not complete a real user login or publish active authorization evidence.
-- [ ] Delivery: update current docs and validation report, preserve old APK and Release, copy new APKs with the same package/signature, verify checksums, commit/push and publish a new prerelease to N3urda/animeko.
+- [x] Delivery: update current docs and validation report, preserve old APK and Release, copy new APKs with the same package/signature, verify checksums, commit/push and publish a new prerelease to N3urda/animeko.
 
 Run with the task-local JBR 21 / SDK / Gradle home:
 
@@ -21,3 +21,5 @@ Run with the task-local JBR 21 / SDK / Gradle home:
 ```
 
 Check behavior and layout bounds, not Android assertScreenshot (a no-op here). Release only verified artifacts at the committed revision; declare physical-TV and real-account validation limits.
+
+Published prerelease: [android-tv-preview-20260921](https://github.com/N3urda/animeko/releases/tag/android-tv-preview-20260921), source `ca3bfb223084656d2d90138c51c10b4cd9ccf6e2`. All 124 scoped tests pass. Five release assets match the local SHA-256 digests; the public universal APK download also matches.
