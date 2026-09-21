@@ -35,6 +35,37 @@ import org.junit.Test
 @OptIn(ExperimentalTestApi::class)
 class TvLoginInteractionTest {
     @Test
+    fun loginOffersBangumiWithoutSendingAnEmailCode() = runAniComposeUiTest {
+        var opened = 0
+        setContent {
+            TvTheme {
+                TvLoginForm(
+                    mode = EmailLoginUiState.Mode.LOGIN,
+                    onSend = { error("Email must not be sent for Bangumi login") },
+                    onSubmit = { SendOtpResult.InvalidOtp },
+                    onSuccess = {}, onBack = {}, onBangumi = { opened++ },
+                )
+            }
+        }
+        onNodeWithTag("tv-login-bangumi").assertIsDisplayed().performTvClick()
+        runOnIdle { assertEquals(1, opened) }
+    }
+
+    @Test
+    fun emailBindingDoesNotOfferAnUnrelatedLoginProvider() = runAniComposeUiTest {
+        setContent {
+            TvTheme {
+                TvLoginForm(
+                    mode = EmailLoginUiState.Mode.BIND,
+                    onSend = {}, onSubmit = { SendOtpResult.InvalidOtp },
+                    onSuccess = {}, onBack = {}, onBangumi = {},
+                )
+            }
+        }
+        onNodeWithTag("tv-login-bangumi").assertDoesNotExist()
+    }
+
+    @Test
     fun sendFailureDoesNotClaimOtpWasSentAndKeepsRetryAvailable() = runAniComposeUiTest {
         var requests = 0
         setContent {

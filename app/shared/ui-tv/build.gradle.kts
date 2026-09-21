@@ -30,6 +30,8 @@ dependencies {
     api(projects.app.shared)
     api(libs.androidx.tv.material)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.zxing.core)
+    testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.junit5.jupiter.api)
     testRuntimeOnly(libs.junit5.jupiter.engine)
     testRuntimeOnly(libs.junit5.platform.launcher)

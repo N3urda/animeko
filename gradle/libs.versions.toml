@@ -56,6 +56,7 @@ androidx-compose-material3-adaptive = "1.3.0-alpha10"
 
 ### OTHERS ###
 
+zxing = "3.5.4" # https://github.com/zxing/zxing/releases
 bytebuddy = "1.17.4" # https://github.com/raphw/byte-buddy/releases
 jna = "5.13.0" # 不要轻易改这个版本, 它可能导致 VLC 兼容性问题
 dbus-java = "5.2.0"
@@ -127,6 +128,7 @@ compose-stability-analyzer = { id = "com.github.skydoves.compose.stability.analy
 aboutlibraries = { id = "com.mikepenz.aboutlibraries.plugin", version.ref = "aboutlibraries" }
 
 [libraries]
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 # Plugin libraries for build-logic.
 android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref = "android-gradle-plugin" }
 android-kotlin-multiplatform-library-gradle-plugin = { module = "com.android.kotlin.multiplatform.library:com.android.kotlin.multiplatform.library.gradle.plugin", version.ref = "android-gradle-plugin" }

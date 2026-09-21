@@ -19,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,14 +59,15 @@ fun TvSearchScreen(
     val pager by state.searchState.pagerFlow.collectAsStateWithLifecycle()
     var submittedPager by remember { mutableStateOf<Any?>(null) }
     var awaitingSearch by remember { mutableStateOf(false) }
-    fun search() {
-        if (text.text.isBlank() && initialTags.isNullOrEmpty()) return
+    var showFilters by rememberSaveable { mutableStateOf(false) }
+    fun submit(query: SubjectSearchQuery) {
         keyboard?.hide()
         submittedPager = pager
-        awaitingSearch = true
-        focus.requestFocus("search-result:")
-        vm.onSearchPageIntent(SearchPageIntent.UpdateQuery(state.query.copy(keywords = text.text.toString().trim()), submit = true))
+        awaitingSearch = tvSearchHasConstraints(query)
+        focus.requestFocus(if (awaitingSearch) "search-result:" else "search-input")
+        vm.onSearchPageIntent(SearchPageIntent.UpdateQuery(query, submit = true))
     }
+    fun search() = submit(state.query.copy(keywords = text.text.toString().trim()))
     LaunchedEffect(vm) { vm.onSearchPageIntent(SearchPageIntent.StartInitialSearch) }
     val resultReady = pager != null && (!awaitingSearch || pager !== submittedPager) &&
         results.loadState.refresh !is LoadState.Loading
@@ -83,9 +85,12 @@ fun TvSearchScreen(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 onKeyboardAction = { search() },
             )
-            TvButton("搜索", ::search, Modifier.tvFocusTarget("search-submit", focus).testTag("tv-search-submit"), enabled = text.text.isNotBlank() || !initialTags.isNullOrEmpty())
+            TvButton("搜索", ::search, Modifier.tvFocusTarget("search-submit", focus).testTag("tv-search-submit"), enabled = tvSearchHasConstraints(state.query.copy(keywords = text.text.toString())))
+            TvButton("筛选 · 类型 / 设定", { keyboard?.hide(); showFilters = true },
+                Modifier.tvFocusTarget("search-filters", focus).testTag("tv-search-filters"))
         }
-        if (state.hasActiveSearch) {
+        if (state.query.hasFilters()) Text(tvSearchFilterSummary(state.query), fontSize = 14.sp, maxLines = 1)
+        if (state.hasActiveSearch && tvSearchHasConstraints(state.query)) {
             if (awaitingSearch && pager === submittedPager) {
                 TvStaticFocusGroup(focus, "search-result:", emptyList(), ready = false, fallbackKey = "search-input")
                 TvMessage("正在搜索…", "可返回输入框修改关键词。")
@@ -93,9 +98,15 @@ fun TvSearchScreen(
                 TvCatalogueSearchResults(results, resultReady, focus, onSubject)
             }
         } else {
-            TvMessage("输入番剧名称开始搜索", "按遥控器确认键打开输入法，输入后选择「搜索」。")
+            TvMessage("输入名称，或按类型和设定筛选", "可不填名称，直接选择筛选条件并应用。")
         }
     }
+    if (showFilters) TvSearchFilterDialog(
+        initialQuery = state.query.copy(keywords = text.text.toString().trim()),
+        seasons = state.seasons,
+        onApply = { showFilters = false; submit(it) },
+        onDismiss = { showFilters = false; focus.requestFocus("search-filters") },
+    )
 }
 
 @Composable

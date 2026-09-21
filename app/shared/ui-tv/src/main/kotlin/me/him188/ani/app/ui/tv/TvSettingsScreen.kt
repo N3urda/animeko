@@ -84,6 +84,7 @@ fun TvSettingsScreen(
     onDeviceUiMode: (DeviceUiMode) -> Unit,
     onLogin: () -> Unit,
     onBack: () -> Unit,
+    onBangumi: () -> Unit,
 ) {
     val koin = remember { KoinPlatform.getKoin() }
     val settings = remember { koin.get<SettingsRepository>() }
@@ -193,6 +194,7 @@ fun TvSettingsScreen(
             "账号" -> {
                 add(TvSettingsItem("account-info", self?.let { "已登录：${it.nickname.ifBlank { it.email.orEmpty().ifBlank { "Animeko 账号" } }}" } ?: "尚未登录", "登录后可同步收藏和观看记录。"))
                 add(TvSettingsItem("account-login", if (self == null) "邮箱登录" else "绑定 / 更换邮箱", "通过邮箱验证码验证账号", onClick = onLogin))
+                add(TvSettingsItem("account-bangumi", if (self == null) "Bangumi 登录" else "关联 Bangumi", "用手机扫码授权，电视自动完成登录或关联", onClick = onBangumi))
                 if (self != null) add(TvSettingsItem("account-logout", "退出登录", "本机的播放缓存会保留", onClick = { confirmation = "退出当前账号？本机的播放缓存会保留。" to { users.clearSelfInfo(); status = "已退出登录" } }))
             }
             "界面" -> {

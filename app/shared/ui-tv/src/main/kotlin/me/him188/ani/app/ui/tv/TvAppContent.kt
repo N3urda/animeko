@@ -84,13 +84,22 @@ fun TvAppContent(
                             is NavRoutes.SubjectDetail -> TvSubjectScreen(route.subjectId, episode, back)
                             is NavRoutes.EpisodeDetail -> TvPlayerScreen(route.subjectId, route.episodeId, back)
                             NavRoutes.PlaybackHistory -> TvHistoryScreen(episode, back, onLogin = navigator::navigateLogin)
-                            is NavRoutes.Settings, NavRoutes.Caches -> TvSettingsScreen(deviceUiMode, onDeviceUiMode, navigator::navigateLogin, back)
+                            is NavRoutes.Settings, NavRoutes.Caches -> TvSettingsScreen(deviceUiMode, onDeviceUiMode, navigator::navigateLogin, back, navigator::navigateBangumiAuthorize)
                             NavRoutes.EmailLoginStart, NavRoutes.EmailLoginVerify -> TvLoginScreen(
                                 onSuccess = { navigator.popBackOrNavigateToMain(MainScreenPage.Exploration) },
                                 onBack = back,
+                                onBangumi = navigator::navigateBangumiAuthorize,
+                            )
+                            NavRoutes.BangumiAuthorize -> TvBangumiAuthorizeScreen(
+                                onSuccess = {
+                                    navigator.popBackStack(NavRoutes.BangumiAuthorize, true)
+                                    navigator.popBackStack(NavRoutes.EmailLoginVerify, true)
+                                    navigator.popBackStack(NavRoutes.EmailLoginStart, true)
+                                },
+                                onBack = back,
                             )
                             else -> TvPage("电视端功能", back) {
-                                TvMessage("此功能请在手机端操作", "电视端支持邮箱登录、收藏、搜索、播放和数据源设置。")
+                                TvMessage("此功能请在手机端操作", "电视端支持邮箱或 Bangumi 登录、收藏、搜索、播放和数据源设置。")
                                 TvButton("邮箱登录", navigator::navigateLogin)
                             }
                         }

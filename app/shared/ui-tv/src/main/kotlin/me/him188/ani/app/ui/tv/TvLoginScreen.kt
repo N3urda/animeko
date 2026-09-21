@@ -62,7 +62,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 @Composable
-fun TvLoginScreen(onSuccess: () -> Unit, onBack: () -> Unit) {
+fun TvLoginScreen(onSuccess: () -> Unit, onBack: () -> Unit, onBangumi: () -> Unit) {
     val vm = viewModel { EmailLoginViewModel() }
     val state by vm.state.collectAsStateWithLifecycle()
     TvLoginForm(
@@ -75,6 +75,7 @@ fun TvLoginScreen(onSuccess: () -> Unit, onBack: () -> Unit) {
         },
         onSuccess = onSuccess,
         onBack = onBack,
+        onBangumi = onBangumi,
     )
 }
 
@@ -89,6 +90,7 @@ internal fun TvLoginForm(
     onBack: () -> Unit,
     initialEmail: String = "",
     nextResendTime: Instant = Instant.DISTANT_PAST,
+    onBangumi: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
@@ -207,7 +209,11 @@ internal fun TvLoginForm(
                     if (!inputOnly) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                             TvButton("返回", onBack, Modifier.tvFocusTarget("page-back", focus).testTag("tv-back"))
-                            Text(title, fontSize = 28.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(title, Modifier.weight(1f), fontSize = 28.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (mode == EmailLoginUiState.Mode.LOGIN && onBangumi != null) TvButton(
+                                "Bangumi 登录", onBangumi,
+                                Modifier.tvFocusTarget("login-bangumi", focus).testTag("tv-login-bangumi"),
+                            )
                         }
                         if (showIntroduction) Text(
                             if (mode == EmailLoginUiState.Mode.LOGIN) "未注册的邮箱会创建 Animeko 账号。确认键输入，返回键关闭输入法。"
