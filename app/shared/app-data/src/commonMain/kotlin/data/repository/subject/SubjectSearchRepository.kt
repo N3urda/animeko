@@ -43,23 +43,31 @@ class SubjectSearchRepository(
     /**
      * 使用 [searchQuery] 搜索条目.
      *
+     * [includePreviewDetails] 控制是否请求简介、标签、集数和制作人员, 海报列表可只获取基础信息.
+     *
      * 注意, 此方法返回的数据总是会包含 NSFW 条目. 调用方需要自行根据用户设置考虑过滤.
      */
     fun searchSubjects(
         searchQuery: SubjectSearchQuery,
         ignoreDoneAndDropped: suspend () -> Boolean = { false },
-        pagingConfig: PagingConfig = defaultSearchPagingConfig
+        pagingConfig: PagingConfig = defaultSearchPagingConfig,
+        includePreviewDetails: Boolean = true,
     ): Flow<PagingData<BatchSubjectDetails>> = Pager(
         config = pagingConfig,
         initialKey = 0,
         pagingSourceFactory = {
-            SubjectSearchPagingSource(ignoreDoneAndDropped, searchQuery)
+            SubjectSearchPagingSource(
+                ignoreDoneAndDropped,
+                searchQuery,
+                fields = if (includePreviewDetails) subjectSearchFields else posterSearchFields,
+            )
         },
     ).flow.flowOn(defaultDispatcher)
 
     private inner class SubjectSearchPagingSource(
         private val ignoreDoneAndDropped: suspend () -> Boolean,
-        private val searchQuery: SubjectSearchQuery
+        private val searchQuery: SubjectSearchQuery,
+        private val fields: List<SubjectSearchField>,
     ) : PagingSource<Int, BatchSubjectDetails>() {
         private val filters = searchQuery.toSubjectSearchFilters()
         override fun getRefreshKey(state: PagingState<Int, BatchSubjectDetails>): Int? = null
@@ -75,7 +83,7 @@ class SubjectSearchRepository(
                     limit = params.loadSize,
                     filters = filters,
                     sort = searchQuery.sort,
-                    fields = subjectSearchFields,
+                    fields = fields,
                 )
 
                 val filteredSubjects = if (ignoreDoneAndDropped()) {
@@ -143,6 +151,16 @@ class SubjectSearchRepository(
         val defaultSearchPagingConfig = PagingConfig(
             pageSize = 20, // Bangumi API 实际最多返回 20 个结果 #2417
             initialLoadSize = 20,
+        )
+
+        private val posterSearchFields = listOf(
+            SubjectSearchField.NAME,
+            SubjectSearchField.IMAGE_LARGE,
+            SubjectSearchField.NSFW,
+            SubjectSearchField.AIR_DATE,
+            SubjectSearchField.SCORE,
+            SubjectSearchField.RANK,
+            SubjectSearchField.RATING_TOTAL,
         )
 
         private val subjectSearchFields = listOf(

@@ -65,6 +65,7 @@ class SubjectPreviewItemInfo(
     companion object {
         /**
          * @param nsfwModeSettings 用户设置的 NSFW 显示模式
+         * @param includePreviewDetails 是否生成季度、集数、标签和制作人员文字; 海报网格仅需基础信息.
          */
         suspend fun compute(
             subjectInfo: SubjectInfo,
@@ -74,7 +75,22 @@ class SubjectPreviewItemInfo(
             characters: List<LightRelatedCharacterInfo>?,
             roleSet: RoleSet = RoleSet.Default,
             hide: Boolean = false,
+            includePreviewDetails: Boolean = true,
         ): SubjectPreviewItemInfo {
+            if (!includePreviewDetails) {
+                return SubjectPreviewItemInfo(
+                    subjectId = subjectInfo.subjectId,
+                    imageUrl = subjectInfo.imageLarge,
+                    title = subjectInfo.nameCnOrName,
+                    tags = "",
+                    staff = null,
+                    actors = null,
+                    rating = subjectInfo.ratingInfo,
+                    nsfw = subjectInfo.nsfw,
+                    nsfwMode = if (subjectInfo.nsfw) nsfwModeSettings else NsfwMode.DISPLAY,
+                    hide = hide,
+                )
+            }
             val airingInfo = SubjectAiringInfo.computeFromSubjectInfo(subjectInfo, mainEpisodeCount)
             val tags = buildString {
                 if (subjectInfo.airDate.isValid) {

@@ -52,6 +52,7 @@ fun TvSearchScreen(
         SearchViewModel(
             SubjectSearchQuery(keywords = initialKeyword.orEmpty(), tags = initialTags),
             pagingConfig = tvCataloguePagingConfig,
+            includePreviewDetails = false,
         )
     }
     val state by vm.searchPageState.collectAsStateWithLifecycle()

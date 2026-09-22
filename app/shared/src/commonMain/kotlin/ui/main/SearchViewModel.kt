@@ -60,6 +60,7 @@ import org.koin.core.component.inject
 class SearchViewModel(
     initialSearchQuery: SubjectSearchQuery,
     pagingConfig: PagingConfig = SubjectSearchRepository.defaultSearchPagingConfig,
+    includePreviewDetails: Boolean = true,
 ) : AbstractViewModel(), KoinComponent {
     private val searchHistoryRepository: SubjectSearchHistoryRepository by inject()
     private val subjectSearchCompletionRepository: SubjectSearchCompletionRepository by inject()
@@ -94,6 +95,7 @@ class SearchViewModel(
             subjectSearchRepository.searchSubjects(
                 searchQuery = query,
                 pagingConfig = pagingConfig,
+                includePreviewDetails = includePreviewDetails,
                 ignoreDoneAndDropped = {
                     settingsRepository.uiSettings.flow.map {
                         it.searchSettings.ignoreDoneAndDroppedSubjects
@@ -111,6 +113,7 @@ class SearchViewModel(
                         },
                         relatedPersonList = subject.lightSubjectRelations.lightRelatedPersonInfoList,
                         characters = subject.lightSubjectRelations.lightRelatedCharacterInfoList,
+                        includePreviewDetails = includePreviewDetails,
                     )
                 }
             }.cachedIn(scope)
