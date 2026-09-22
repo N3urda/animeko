@@ -11,6 +11,7 @@ package me.him188.ani.app.ui.foundation
 
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.IntSize
 import com.github.panpf.sketch.PlatformContext
 import com.github.panpf.sketch.asBitmapOrNull
 import com.github.panpf.sketch.cache.CachePolicy
@@ -56,7 +57,7 @@ class AniImageLoaderConfigurationTest {
         )
 
         try {
-            assertEquals(0L, sketch.memoryCache.maxSize)
+            assertEquals(10L * 1024L * 1024L, sketch.memoryCache.maxSize)
             assertEquals(0L, sketch.memoryCache.size)
             assertEquals(100L * 1024L * 1024L, sketch.downloadCache.maxSize)
             assertEquals(cacheDirectory.resolve("download"), sketch.downloadCache.directory)
@@ -64,7 +65,7 @@ class AniImageLoaderConfigurationTest {
 
             val options = requireNotNull(sketch.globalImageOptions)
             assertEquals(CachePolicy.ENABLED, options.downloadCachePolicy)
-            assertEquals(CachePolicy.DISABLED, options.memoryCachePolicy)
+            assertEquals(CachePolicy.ENABLED, options.memoryCachePolicy)
             assertEquals(CachePolicy.DISABLED, options.resultCachePolicy)
             assertIs<CrossfadeTransition.Factory>(options.transitionFactory)
 
@@ -162,10 +163,10 @@ class AniImageLoaderConfigurationTest {
             val success = assertIs<ImageResult.Success>(
                 sketch.execute(
                     ImageRequest(PlatformContext.INSTANCE, "https://example.com/portrait.png") {
-                        size(300, 100)
                         configureAniImageRequest(
                             contentScale = ContentScale.Crop,
                             alignment = Alignment.Center,
+                            requestSize = IntSize(300, 100),
                         )
                         downloadCachePolicy(CachePolicy.DISABLED)
                         resultCachePolicy(CachePolicy.DISABLED)
@@ -180,6 +181,38 @@ class AniImageLoaderConfigurationTest {
             assertEquals(900, success.imageInfo.height)
             assertEquals(600, success.toAniImageLoadSuccess().width)
             assertEquals(900, success.toAniImageLoadSuccess().height)
+        } finally {
+            sketch.shutdown()
+            client.close()
+        }
+    }
+
+    @Test
+    fun `layout pixels bound decoding and repeated loads reuse the bitmap`() = runTest {
+        val bytes = encodedRaster(EncodedImageFormat.PNG, width = 900, height = 1200)
+        var calls = 0
+        val client = HttpClient(MockEngine {
+            calls++
+            respond(bytes, headers = headersOf(HttpHeaders.ContentType, "image/png"))
+        })
+        val sketch = createDefaultSketch(PlatformContext.INSTANCE, client.asScopedHttpClient())
+        val url = "https://example.com/layout-pixels-${System.nanoTime()}.png"
+
+        try {
+            // A 100 x 150 dp cover at density 3 occupies 300 x 450 physical pixels.
+            val layoutSize = IntSize(300, 450)
+            val requestSize = layoutSize.toAniImageRequestSize()
+            fun request() = ImageRequest(PlatformContext.INSTANCE, url) {
+                configureAniImageRequest(ContentScale.FillBounds, Alignment.Center, requestSize)
+            }
+
+            val first = assertIs<ImageResult.Success>(sketch.execute(request()))
+            assertEquals(320, first.image.width)
+            assertEquals(512, first.image.height)
+            assertTrue(first.image.width >= layoutSize.width)
+            assertTrue(first.image.height >= layoutSize.height)
+            assertEquals(DataFrom.MEMORY_CACHE, assertIs<ImageResult.Success>(sketch.execute(request())).dataFrom)
+            assertEquals(1, calls)
         } finally {
             sketch.shutdown()
             client.close()
@@ -267,6 +300,44 @@ class AniImageLoaderConfigurationTest {
             assertTrue(large.image.height > small.image.height)
             assertEquals(0L, sketch.memoryCache.size)
             assertTrue(sketch.memoryCache.keys().isEmpty())
+        } finally {
+            sketch.shutdown()
+            client.close()
+        }
+    }
+
+    @Test
+    fun `repeated request is served from the memory cache`() = runTest {
+        val bytes = encodedRaster(EncodedImageFormat.PNG, width = 600, height = 900)
+        var calls = 0
+        val client = HttpClient(
+            MockEngine {
+                calls++
+                respond(
+                    content = bytes,
+                    headers = headersOf(HttpHeaders.ContentType, "image/png"),
+                )
+            },
+        )
+        val sketch = createDefaultSketch(PlatformContext.INSTANCE, client.asScopedHttpClient())
+        val url = "https://example.com/still-${System.nanoTime()}.png"
+
+        try {
+            fun request() = ImageRequest(PlatformContext.INSTANCE, url) {
+                size(300, 200)
+                configureAniImageRequest(
+                    contentScale = ContentScale.Crop,
+                    alignment = Alignment.Center,
+                )
+            }
+
+            val first = assertIs<ImageResult.Success>(sketch.execute(request()))
+            val second = assertIs<ImageResult.Success>(sketch.execute(request()))
+
+            assertEquals(DataFrom.NETWORK, first.dataFrom)
+            assertEquals(DataFrom.MEMORY_CACHE, second.dataFrom)
+            assertEquals(1, calls)
+            assertTrue(sketch.memoryCache.size in 1..sketch.memoryCache.maxSize)
         } finally {
             sketch.shutdown()
             client.close()

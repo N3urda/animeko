@@ -49,7 +49,10 @@ fun TvSearchScreen(
     initialTags: List<String>? = null,
 ) {
     val vm = viewModel(key = "tv-search-${initialKeyword.orEmpty()}-${initialTags.orEmpty()}") {
-        SearchViewModel(SubjectSearchQuery(keywords = initialKeyword.orEmpty(), tags = initialTags))
+        SearchViewModel(
+            SubjectSearchQuery(keywords = initialKeyword.orEmpty(), tags = initialTags),
+            pagingConfig = tvCataloguePagingConfig,
+        )
     }
     val state by vm.searchPageState.collectAsStateWithLifecycle()
     val results = state.searchState.collectItemsWithLifecycle()

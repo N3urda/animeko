@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -84,26 +85,29 @@ internal fun TvCatalogueEpisodeGrid(
 ) {
     val focus = LocalTvFocusState.current
     val grid = rememberLazyGridState()
-    val groups = tvCatalogueEpisodeGroups(episodes)
+    val groups = remember(episodes) { tvCatalogueEpisodeGroups(episodes) }
     var selectedGroupKey by rememberSaveable { mutableStateOf<String?>(null) }
     val rememberedEpisode = focus.requestedKey.removePrefix("subject:episode-").toIntOrNull()
     val groupIndex = groups.indexOfFirst { it.key == selectedGroupKey }.takeIf { it >= 0 }
         ?: groups.indexOfFirst { group -> group.episodes.any { it.episodeId == (rememberedEpisode ?: playEpisodeId) } }
             .coerceAtLeast(0)
     val group = groups.getOrNull(groupIndex)
-    val currentEpisode = tvCataloguePlaybackEpisode(episodes, playEpisodeId)
+    val currentEpisode = remember(episodes, playEpisodeId) { tvCataloguePlaybackEpisode(episodes, playEpisodeId) }
     val visibleEpisodes = group?.episodes.orEmpty()
-    val targets = buildList {
-        headerFocusKeys.forEach { add(it to 0) }
-        if (currentEpisode != null) add("subject:locate" to 1)
-        if (groupIndex > 0) add("subject:previous-group" to 1)
-        if (groupIndex < groups.lastIndex) add("subject:next-group" to 1)
-        visibleEpisodes.forEachIndexed { index, episode ->
-            if (episode.isBroadcast) add("subject:episode-${episode.episodeId}" to index + 2)
+    val targets = remember(headerFocusKeys, currentEpisode, groupIndex, groups, visibleEpisodes) {
+        buildList {
+            headerFocusKeys.forEach { add(it to 0) }
+            if (currentEpisode != null) add("subject:locate" to 1)
+            if (groupIndex > 0) add("subject:previous-group" to 1)
+            if (groupIndex < groups.lastIndex) add("subject:next-group" to 1)
+            visibleEpisodes.forEachIndexed { index, episode ->
+                if (episode.isBroadcast) add("subject:episode-${episode.episodeId}" to index + 2)
+            }
         }
     }
+    val targetKeys = remember(targets) { targets.map { it.first } }
     TvLazyFocusGroup(
-        focus, "subject:", targets.map { it.first }, !episodes.isPlaceholder, "page-back",
+        focus, "subject:", targetKeys, !episodes.isPlaceholder, "page-back",
         scrollToItem = { grid.scrollToItem(targets[it].second) },
         isItemVisible = { key ->
             val index = targets.firstOrNull { it.first == key }?.second

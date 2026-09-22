@@ -114,7 +114,10 @@ private fun TvSubjectContent(
         )
         return
     }
-    val playEpisode = tvCataloguePlaybackEpisode(episodes, state.subjectProgressState.episodeIdToPlay)
+    val preferredEpisodeId = state.subjectProgressState.episodeIdToPlay
+    val playEpisode = remember(episodes, preferredEpisodeId) {
+        tvCataloguePlaybackEpisode(episodes, preferredEpisodeId)
+    }
     val headerFocusKeys = buildList {
         if (playEpisode != null) add("subject:play")
         if (canCollect && !collection.isSetSelfCollectionTypeWorking) add("subject:collection")
@@ -127,6 +130,7 @@ private fun TvSubjectContent(
                     info.imageLarge, null,
                     Modifier.width(156.dp).aspectRatio(2f / 3f),
                     contentScale = ContentScale.Fit,
+                    crossfade = false,
                 )
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text(info.displayName, fontSize = 28.sp, lineHeight = 36.sp)

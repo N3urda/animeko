@@ -9,6 +9,9 @@
 
 package me.him188.ani.app.ui.tv
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -62,6 +65,10 @@ fun TvAppContent(
                     rememberSaveableStateHolderNavEntryDecorator(),
                     rememberViewModelStoreNavEntryDecorator(),
                 ),
+                // 电视页面直接切换, 避免同时合成进出两页的大面积过渡.
+                transitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+                popTransitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
+                predictivePopTransitionSpec = { EnterTransition.None togetherWith ExitTransition.None },
                 entryProvider = { route ->
                     NavEntry(route) {
                         val back: () -> Unit = navigator::popBackStack

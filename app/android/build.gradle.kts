@@ -107,6 +107,15 @@ android {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("debug")
         }
+        create("tvPreview") {
+            initWith(getByName("release"))
+            matchingFallbacks += "release"
+            isDebuggable = false
+            applicationIdSuffix = getLocalProperty("ani.android.debug.applicationIdSuffix") ?: ".tvpreview"
+            resValue("string", "preview_app_name", getLocalProperty("ani.android.debug.appName") ?: "Animeko TV Preview")
+            manifestPlaceholders["appLabel"] = "@string/preview_app_name"
+            signingConfig = signingConfigs.getByName("debug")
+        }
     }
     flavorDimensions += "distribution"
     productFlavors {

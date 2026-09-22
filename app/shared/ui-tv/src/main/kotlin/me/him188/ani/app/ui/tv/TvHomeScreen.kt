@@ -57,7 +57,7 @@ fun TvHomeScreen(
     onLogin: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val vm = viewModel { ExplorationPageViewModel() }
+    val vm = viewModel { ExplorationPageViewModel(recommendationPagingConfig = tvCataloguePagingConfig) }
     val followed = vm.explorationPageState.followedSubjectsPager.collectAsLazyPagingItemsWithLifecycle()
     val trending = vm.explorationPageState.trendingSubjectInfoPager
     val recommendations = vm.explorationPageState.recommendationPager.collectAsLazyPagingItemsWithLifecycle()
@@ -187,14 +187,19 @@ internal fun TvCatalogueHomeNavigation(
     }
 }
 
-private data class TvRailPoster(val pagingIndex: Int, val poster: TvPoster)
+internal data class TvRailPoster(val pagingIndex: Int, val poster: TvPoster)
 
-private fun <T : Any> LazyPagingItems<T>.tvRailPosters(poster: (T) -> TvPoster): List<TvRailPoster> =
-    itemSnapshotList.items.mapIndexedNotNull { index, item ->
-        val display = poster(item)
-        if (display.nsfwMode == NsfwMode.HIDE) null
-        else TvRailPoster(itemSnapshotList.placeholdersBefore + index, display)
+@Composable
+internal fun <T : Any> LazyPagingItems<T>.tvRailPosters(poster: (T) -> TvPoster): List<TvRailPoster> {
+    val snapshot = itemSnapshotList
+    return remember(snapshot, poster) {
+        snapshot.items.mapIndexedNotNull { index, item ->
+            val display = poster(item)
+            if (display.nsfwMode == NsfwMode.HIDE) null
+            else TvRailPoster(snapshot.placeholdersBefore + index, display)
+        }
     }
+}
 
 @Composable
 private fun <T : Any> TvHomeRailFocus(
@@ -204,10 +209,12 @@ private fun <T : Any> TvHomeRailFocus(
 ) {
     val error = pager.loadState.refresh is LoadState.Error || pager.loadState.append is LoadState.Error
     val ready = entries.isNotEmpty() || pager.loadState.refresh !is LoadState.Loading
-    val keys = entries.map { "$group${it.poster.id}" } + when {
-        error -> listOf("${group}retry")
-        refreshWhenEmpty && ready && entries.isEmpty() -> listOf("${group}refresh")
-        else -> emptyList()
+    val keys = remember(entries, group, error, refreshWhenEmpty, ready) {
+        entries.map { "$group${it.poster.id}" } + when {
+            error -> listOf("${group}retry")
+            refreshWhenEmpty && ready && entries.isEmpty() -> listOf("${group}refresh")
+            else -> emptyList()
+        }
     }
     val requestedId = focus.requestedKey.takeIf { it.startsWith(group) }?.removePrefix(group)?.toIntOrNull()
     val needsTargetPage = requestedId != null && entries.none { it.poster.id == requestedId } &&

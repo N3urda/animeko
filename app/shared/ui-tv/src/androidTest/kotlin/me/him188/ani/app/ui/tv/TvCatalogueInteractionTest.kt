@@ -114,6 +114,35 @@ class TvCatalogueInteractionTest {
     }
 
     @Test
+    fun refreshedEpisodesUpdateTheGroupAndPlaybackTargetOnTheOpenPage() = runAniComposeUiTest {
+        var episodes by mutableStateOf(EpisodeListUiState("连载番剧", listOf(episode(1001, 1)), emptyList()))
+        var playEpisodeId by mutableStateOf(1001)
+        setContent {
+            TvTheme {
+                TvPage("连载番剧", {}, focusState = rememberTvFocusState("subject:")) {
+                    TvCatalogueEpisodeGrid(episodes, playEpisodeId, emptyList(), {}) {}
+                }
+            }
+        }
+        onNodeWithTag("tv-episode-1001").assertExists()
+        onNodeWithText("定位 01").assertExists()
+        runOnIdle {
+            episodes = EpisodeListUiState("连载番剧", (1..49).map { episode(1000 + it, it) }, emptyList())
+        }
+        onNodeWithTag("tv-episode-next-group").assertExists()
+        runOnIdle { playEpisodeId = 1025 }
+        onNodeWithTag("tv-episode-1025").assertExists()
+        onNodeWithText("定位 25").assertExists()
+        runOnIdle {
+            episodes = episodes.copy(mainEpisodes = episodes.mainEpisodes.map {
+                if (it.episodeId == 1025) it.copy(isBroadcast = false) else it
+            })
+        }
+        onNodeWithTag("tv-episode-1025").assertIsNotEnabled()
+        onNodeWithText("定位 01").assertExists()
+    }
+
+    @Test
     fun homeNavigationMovesAcrossEveryEntryInOneRow() = runAniComposeUiTest {
         var collections = 0
         setContent {

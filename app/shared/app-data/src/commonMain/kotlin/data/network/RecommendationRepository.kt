@@ -10,6 +10,7 @@
 package me.him188.ani.app.data.network
 
 import androidx.paging.Pager
+import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
@@ -32,8 +33,10 @@ class RecommendationRepository(
     private val homeApi: ApiInvoker<HomeAniApi>,
     private val ioDispatcher: CoroutineContext = Dispatchers.IO_
 ) : Repository() {
-    fun recommendedSubjectsPager(): Flow<PagingData<RecommendedItemInfo>> {
-        return Pager(defaultPagingConfig, initialKey = 0) {
+    fun recommendedSubjectsPager(
+        pagingConfig: PagingConfig = defaultPagingConfig,
+    ): Flow<PagingData<RecommendedItemInfo>> {
+        return Pager(pagingConfig, initialKey = 0) {
             HomeRecommendationPagingSource()
         }.flow
     }

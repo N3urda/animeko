@@ -316,13 +316,13 @@ class DefaultSubjectDetailsStateFactory : SubjectDetailsStateFactory, KoinCompon
             .onEach {
                 withContext(Dispatchers.Main) { totalStaffCountState.value = it.size }
             }
-            .stateIn(this, SharingStarted.Eagerly, null)
+            .stateIn(this, SharingStarted.Lazily, null)
 
         val relatedCharactersFlow = subjectRelationsRepository.subjectRelatedCharactersFlow(subjectId)
             .onEach {
                 withContext(Dispatchers.Main) { totalCharactersCountState.value = it.size }
             }
-            .stateIn(this, SharingStarted.Eagerly, null)
+            .stateIn(this, SharingStarted.Lazily, null)
 
         val minuteTicker = flow {
             while (true) {

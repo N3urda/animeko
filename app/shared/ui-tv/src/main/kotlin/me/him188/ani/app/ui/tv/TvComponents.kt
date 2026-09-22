@@ -81,7 +81,7 @@ fun TvButton(
             .semantics { this.selected = selected },
         enabled = enabled,
         shape = ButtonDefaults.shape(RoundedCornerShape(12.dp)),
-        scale = ButtonDefaults.scale(focusedScale = 1.02f, pressedScale = 1f),
+        scale = ButtonDefaults.scale(focusedScale = 1f, pressedScale = 1f),
         colors = ButtonDefaults.colors(
             containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
             contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
@@ -98,7 +98,7 @@ internal fun tvCardBorder() = CardDefaults.border(
     focusedBorder = Border(BorderStroke(2.dp, MaterialTheme.colorScheme.primary), shape = RoundedCornerShape(12.dp)),
 )
 
-internal fun tvCardScale() = CardDefaults.scale(focusedScale = 1f, pressedScale = .98f)
+internal fun tvCardScale() = CardDefaults.scale(focusedScale = 1f, pressedScale = 1f)
 
 @Composable
 fun TvPage(
@@ -200,7 +200,10 @@ private fun TvPosterCover(poster: TvPoster, masked: Boolean, modifier: Modifier)
         if (masked || poster.imageUrl.isNullOrBlank()) {
             Text(if (masked) "内容已遮盖" else "Animeko", fontSize = 18.sp)
         } else {
-            AsyncImage(poster.imageUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            AsyncImage(
+                poster.imageUrl, null, Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop, crossfade = false,
+            )
         }
     }
 }
@@ -234,20 +237,24 @@ internal fun <T : Any> TvPosterGrid(
 ) {
     val gridState = rememberLazyGridState()
     val snapshot = items.itemSnapshotList
-    val entries = snapshot.items.mapIndexedNotNull { index, item ->
-        val display = poster(item)
-        if (display.nsfwMode == NsfwMode.HIDE) null
-        else TvPagedPoster(snapshot.placeholdersBefore + index, key(item), display)
+    val entries = remember(snapshot, key, poster) {
+        snapshot.items.mapIndexedNotNull { index, item ->
+            val display = poster(item)
+            if (display.nsfwMode == NsfwMode.HIDE) null
+            else TvPagedPoster(snapshot.placeholdersBefore + index, key(item), display)
+        }
     }
     val hasError = items.loadState.refresh is LoadState.Error || items.loadState.append is LoadState.Error
     val retryKey = "${focusGroup}retry"
     val moreKey = "${focusGroup}more"
     val canLoadMore = entries.isEmpty() && items.itemCount > 0 &&
         !items.loadState.append.endOfPaginationReached && !hasError
-    val focusKeys = entries.map { "$focusGroup${it.id}" } + when {
-        hasError -> listOf(retryKey)
-        canLoadMore -> listOf(moreKey)
-        else -> emptyList()
+    val focusKeys = remember(entries, focusGroup, hasError, canLoadMore) {
+        entries.map { "$focusGroup${it.id}" } + when {
+            hasError -> listOf(retryKey)
+            canLoadMore -> listOf(moreKey)
+            else -> emptyList()
+        }
     }
     val requestedId = focusState.requestedKey.takeIf { it.startsWith(focusGroup) }
         ?.removePrefix(focusGroup)?.toIntOrNull()

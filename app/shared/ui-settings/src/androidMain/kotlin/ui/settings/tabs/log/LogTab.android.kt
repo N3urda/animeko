@@ -28,7 +28,6 @@ import me.him188.ani.app.ui.lang.Lang
 import me.him188.ani.app.ui.lang.settings_log_copy_today_log_content
 import me.him188.ani.app.ui.lang.settings_log_share_file
 import me.him188.ani.app.ui.lang.settings_log_share_today_log_file
-import me.him188.ani.buildconfig.AndroidBuildConfig
 import org.jetbrains.compose.resources.stringResource
 import java.io.File
 
@@ -51,7 +50,7 @@ internal actual fun ColumnScope.PlatformLoggingItems(listItemColors: ListItemCol
                 Intent.EXTRA_STREAM,
                 FileProvider.getUriForFile(
                     context,
-                    AndroidBuildConfig.APP_APPLICATION_ID + ".fileprovider",
+                    context.packageName + ".fileprovider",
                     context.getCurrentLogFile(),
                 ),
             )

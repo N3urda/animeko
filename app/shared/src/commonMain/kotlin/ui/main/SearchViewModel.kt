@@ -10,6 +10,7 @@
 package me.him188.ani.app.ui.main
 
 import androidx.compose.runtime.Stable
+import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.map
@@ -58,6 +59,7 @@ import org.koin.core.component.inject
 @Stable
 class SearchViewModel(
     initialSearchQuery: SubjectSearchQuery,
+    pagingConfig: PagingConfig = SubjectSearchRepository.defaultSearchPagingConfig,
 ) : AbstractViewModel(), KoinComponent {
     private val searchHistoryRepository: SubjectSearchHistoryRepository by inject()
     private val subjectSearchCompletionRepository: SubjectSearchCompletionRepository by inject()
@@ -91,6 +93,7 @@ class SearchViewModel(
 
             subjectSearchRepository.searchSubjects(
                 searchQuery = query,
+                pagingConfig = pagingConfig,
                 ignoreDoneAndDropped = {
                     settingsRepository.uiSettings.flow.map {
                         it.searchSettings.ignoreDoneAndDroppedSubjects

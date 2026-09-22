@@ -21,7 +21,7 @@ object AndroidLoggingConfigurator {
         </rollingPolicy>
 
         <encoder>
-            <pattern>%date{yyyy-MM-dd HH:mm:ss} %-5level %logger{10} [%file:%line] %msg%n%ex
+            <pattern>%date{yyyy-MM-dd HH:mm:ss} %-5level %logger{10} [%thread] %msg%n%ex
             </pattern>
         </encoder>
     </appender>

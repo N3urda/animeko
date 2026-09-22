@@ -10,6 +10,7 @@
 package me.him188.ani.app.ui.main
 
 import androidx.compose.runtime.Stable
+import androidx.paging.PagingConfig
 import androidx.paging.cachedIn
 import androidx.paging.compose.launchAsLazyPagingItemsIn
 import androidx.paging.filter
@@ -21,6 +22,7 @@ import me.him188.ani.app.data.models.preference.NsfwMode
 import me.him188.ani.app.data.models.subject.subjectInfo
 import me.him188.ani.app.data.network.RecommendationRepository
 import me.him188.ani.app.data.network.TrendsRepository
+import me.him188.ani.app.data.repository.Repository
 import me.him188.ani.app.data.repository.subject.FollowedSubjectsRepository
 import me.him188.ani.app.data.repository.user.SettingsRepository
 import me.him188.ani.app.domain.session.SessionManager
@@ -30,7 +32,9 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 @Stable
-class ExplorationPageViewModel : AbstractViewModel(), KoinComponent {
+class ExplorationPageViewModel(
+    recommendationPagingConfig: PagingConfig = Repository.defaultPagingConfig,
+) : AbstractViewModel(), KoinComponent {
     private val trendsRepository: TrendsRepository by inject()
     private val recommendationRepository: RecommendationRepository by inject()
     private val sessionManager: SessionManager by inject()
@@ -62,7 +66,7 @@ class ExplorationPageViewModel : AbstractViewModel(), KoinComponent {
             if (nsfwMode != NsfwMode.HIDE) return@combine subjects
             subjects.filter { !it.subjectInfo.nsfw }
         }.cachedIn(backgroundScope),
-        recommendationPager = recommendationRepository.recommendedSubjectsPager().cachedIn(backgroundScope),
+        recommendationPager = recommendationRepository.recommendedSubjectsPager(recommendationPagingConfig).cachedIn(backgroundScope),
         horizontalScrollTipFlow = horizontalScrollTipFlow,
         onSetDisableHorizontalScrollTip = {
             backgroundScope.launch {
