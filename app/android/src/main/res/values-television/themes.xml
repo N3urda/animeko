@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Animeko.Launcher" parent="Theme.Animeko.TvStartup" />
+</resources>

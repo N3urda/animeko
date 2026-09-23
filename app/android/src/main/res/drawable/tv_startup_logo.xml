@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TV banner mark, padded to fit the system splash icon's safe area. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+        android:width="288dp"
+        android:height="288dp"
+        android:viewportWidth="320"
+        android:viewportHeight="320">
+    <group android:translateY="70">
+        <path android:fillColor="#F2A9D1" android:pathData="M146,35L181,55L146,75Z" />
+        <path android:fillColor="@android:color/transparent"
+                android:strokeColor="#FFF4FC" android:strokeWidth="3.5"
+                android:strokeLineCap="round" android:strokeLineJoin="round"
+                android:pathData="M70,122L80,96L90,122M74,113H86 M100,122V96L118,122V96 M130,96H142M136,96V122M130,122H142 M153,122V96L163,111L173,96V122 M185,96H201M185,96V122H201M185,109H198 M213,96V122M229,96L213,111L230,122 M250,96C236,96 236,122 250,122C264,122 264,96 250,96" />
+    </group>
+</vector>

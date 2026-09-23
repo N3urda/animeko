@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Animeko.TvStartup" parent="Theme.Animeko.TvStartup.Base">
+        <item name="android:windowSplashScreenBackground">@color/tv_startup_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/tv_startup_logo</item>
+        <item name="android:windowSplashScreenBehavior">icon_preferred</item>
+    </style>
+</resources>
