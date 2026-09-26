@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -80,7 +81,7 @@ class TvHomeRecommendationsTest {
         }
         onNodeWithTag("home-recommendations").performTvClick()
         onNodeWithText("推荐番剧").assertExists()
-        onNodeWithText("接口推荐番剧完整标题").assertExists()
+        onNodeWithTag("tv-subject-title-91071", useUnmergedTree = true).assertTextContains("接口推荐番剧完整标题")
         onNodeWithTag("tv-subject-91071").assertIsFocused().performTvClick()
         runOnIdle { assertEquals(91071, opened) }
     }

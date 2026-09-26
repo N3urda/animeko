@@ -4,31 +4,44 @@
 
 ## 安装
 
-交付文件位于 `output/android-tv/release-20260922/`，也可从 [GitHub Release](https://github.com/N3urda/animeko/releases/tag/android-tv-preview-20260922) 下载：
+交付文件位于 `output/android-tv/release-20260926/`，也可从 [GitHub Release](https://github.com/N3urda/animeko/releases/tag/android-tv-preview-20260926) 下载：
 
 | 文件 | 适用设备 |
 | --- | --- |
-| `Animeko-TV-performance-20260922-universal.apk` | 首选，包含 ARM64 和 ARM32，系统自动选择 |
-| `Animeko-TV-performance-20260922-arm64-v8a.apk` | 已确认使用 64 位 Android 系统的电视 |
-| `Animeko-TV-performance-20260922-armeabi-v7a.apk` | 使用 32 位 Android 系统的电视 |
+| `Animeko-TV-home-20260926-universal.apk` | 首选，包含 ARM64 和 ARM32，系统自动选择 |
+| `Animeko-TV-home-20260926-arm64-v8a.apk` | 已确认使用 64 位 Android 系统的电视 |
+| `Animeko-TV-home-20260926-armeabi-v7a.apk` | 使用 32 位 Android 系统的电视 |
 
 电视芯片支持 64 位不代表电视系统为 64 位；不确定时使用通用包。三种 APK 是同一个应用，选择一个安装即可。
 
 1. 将通用 APK 复制到 U 盘，连接电视。
 2. 在电视文件管理器打开 APK，按系统提示允许该文件管理器安装应用。
-3. 安装后，在电视应用列表打开 **Animeko TV Performance**。首次启动需要联网加载番剧和默认资源订阅，部分资源解析可能需要等待。
+3. 安装后，在电视应用列表打开 **Animeko TV Preview**。首次启动需要联网加载番剧和默认资源订阅，部分资源解析可能需要等待。
 4. 先测试搜索、选集、播放和返回；登录不是浏览和播放的前提。
 
 已经配置 ADB 的设备，也可使用：
 
 ```sh
-adb install -r Animeko-TV-performance-20260922-universal.apk
-adb shell am start -n me.him188.ani.tvpreview.performance/me.him188.ani.android.activity.MainActivity
+adb install -r Animeko-TV-home-20260926-universal.apk
+adb shell am start -n me.him188.ani.tvpreview/me.him188.ani.android.activity.MainActivity
 ```
 
-性能优化包的应用包名为 `me.him188.ani.tvpreview.performance`，名称为 `Animeko TV Performance`，采用 Release 库和 R8 优化，关闭调试模式。版本为 `4.9.0-dev`，版本号 `50406`。同包名、同签名的 Performance 包可覆盖更新并保留数据。
+本次首页包的应用包名为 `me.him188.ani.tvpreview`，名称为 `Animeko TV Preview`，采用 Release 库和 R8 优化，关闭调试模式。版本为 `4.9.0-dev`，版本号 `50406`。签名证书 SHA-256 为 `fad6b4417e67a8742a332d1e15ce2dc79a2f33b45b3c853058380cf08da94d06`，与 2026-09-21 的 TV Preview 相同，可覆盖安装并保留本地数据。
 
-2026-09-21 发布的 TV Preview 使用 `me.him188.ani.tvpreview` 和另一份签名。本包与它并存，账号状态、设置和本机记录独立，不会自动迁移；安装本包无需卸载旧应用。
+2026-09-22 至 09-23 的 Performance 版使用 `me.him188.ani.tvpreview.performance` 和另一份签名，与本包并存。两者账号状态、设置和本机记录独立，不会自动迁移；安装本包无需卸载已有应用。
+
+## 首页浏览
+
+首页采用单行导航、固定焦点介绍和紧凑横卡。标准 960×540dp 视口完整展示两排、每排四张卡片；720×405dp 视口保留当前卡片完整边界，介绍区收起长简介。
+
+- 继续追番显示真实观看进度；热门与推荐保持独立分页和重试。
+- 焦点介绍显示番剧标题、Bangumi 评分、季度、规范类型标签与两行简介。详情从已有仓库读取，250ms 防抖、15 秒超时、最多缓存 24 项；快速移动会取消过期请求。
+- 今日更新使用现有放送时间表，按电视时区筛选日期、按番剧去重，展示播出时间和集数。播出安排不代表片源已经可用；日期跨天自动刷新，网络失败可重试。
+- 按类型找番使用现有规范标签，直接打开带该标签的搜索结果；搜索页可继续追加设定、季度等条件。
+- 上下切换栏目、左右浏览同栏，确认进入详情；返回恢复业务条目焦点。顶部「推荐」直接定位推荐区。
+- 今日更新未确认内容分级时遵循遮盖偏好；停留条目确认安全后显示内容。已确认受限的条目按偏好隐藏或遮盖，返回页面保留分类。确认占位卡片可进入同样受内容偏好保护的详情页。
+
+设计参考 [Netflix 官方电视浏览说明](https://www.netflix.com/tudum/articles/netflix-new-homepage-layout-user-guide)。首页使用本项目真实接口内容。
 
 ## 遥控器操作
 
@@ -46,7 +59,7 @@ adb shell am start -n me.him188.ani.tvpreview.performance/me.him188.ani.android.
 | 媒体键 | 系统播放、暂停、快进、快退和下一集由媒体会话处理 |
 | Home | 已加载视频在返回电视桌面后暂停；回到同一播放会话时保持暂停并显示控制菜单 |
 
-首页提供热门、继续追番和真实接口推荐；推荐支持分页、加载失败重试与空结果刷新。首页导航集中在同一行；海报使用明确焦点边框；低高度页面采用左海报、右标题的横向卡片。搜索、详情和历史保留业务条目的返回位置；详情按每组最多 24 集浏览，支持定位当前剧集，未播出剧集不能播放。长简介通过弹窗上下滚动阅读，关闭后回到原按钮。历史显示已看时间和总时长。
+首页提供热门、继续追番、真实接口推荐、今日更新与类型入口；推荐支持分页、加载失败重试与空结果刷新。首页导航集中在同一行；横向卡片使用明确焦点边框。搜索、详情和历史保留业务条目的返回位置；详情按每组最多 24 集浏览，支持定位当前剧集，未播出剧集不能播放。长简介通过弹窗上下滚动阅读，关闭后回到原按钮。历史显示已看时间和总时长。
 
 筛选面板复用原版类型、设定、角色等标签，支持年份、季度和排序。选择仅修改草稿，「应用筛选」提交查询；返回或取消保留原条件。「清空筛选」保留输入的名称，应用后重新搜索；名称与条件均为空时显示搜索提示。
 
@@ -55,6 +68,14 @@ Bangumi 二维码在电视本地生成，手机打开现有服务的授权链接
 播放中区分查询、解析、缓冲、暂停、结束和失败；同一等待状态持续约 15 秒时，控制栏显示换源和重试入口。选集、字幕和音轨侧栏会定位当前选项。
 
 设置左侧上下选择分类，确认或右键进入内容，非编辑状态左键回分类；编辑网址时左右移动光标，先返回关闭输入法再导航。每类保留最近选项。开关显示明确的开启 / 关闭状态，删除和退出登录默认聚焦取消。设置包括订阅网址和更新、数据源启停、播放选项、视频缓存、账号和界面模式。标准 Android TV 自动进入电视界面；部分厂商电视未声明标准电视特征时可选择电视模式。
+
+## 2026-09-26 首页验证
+
+最终代码通过 47 项 TV 单元测试和 18 项受影响的 Android Compose 交互复测。完整的 97 项交互回归首次运行有 96 项通过，另 1 项发现中文两行简介高度不足；调整介绍区高度后，包含该项的 18 项布局、首页和分页测试全部通过。规格与代码质量审查完成。
+
+最终优化 ARM64 APK 在 Android TV API 34 模拟器完成覆盖安装。1920×1080、320 dpi 下，首屏完整显示两排共 8 张卡片，焦点介绍的两行中文简介完整可见；1440×810、320 dpi 下，焦点卡片边界完整，介绍区保留标题、评分、季度与标签。真实接口验证包括热门与推荐展示、「科幻」入口携带标签查询、今日更新进入详情，以及搜索和详情返回后恢复原条目焦点。验证结束时 crash buffer 为空。截图位于 `output/android-tv/evidence-20260926/`。
+
+ARM32、ARM64 和通用 APK 均通过签名、应用包名、最低系统版本及 ABI 检查。此次未在目标电视或 ARM32 真机运行，也未重复播放、真实账号登录或手机/桌面全量验收。
 
 ## 性能优化验证
 
@@ -103,8 +124,8 @@ adb logcat -b crash -d
 
 ```properties
 sdk.dir=/absolute/path/to/android-sdk
-ani.android.debug.applicationIdSuffix=.tvpreview.performance
-ani.android.debug.appName=Animeko TV Performance
+ani.android.debug.applicationIdSuffix=.tvpreview
+ani.android.debug.appName=Animeko TV Preview
 ani.android.abis=arm64-v8a,armeabi-v7a
 ```
 
@@ -150,4 +171,4 @@ TV 搜索仅请求海报展示、日期排序和评分过滤所需字段，省�
 
 对比时使用同一设备、同一网络和同一查询，分别记录冷启动、首次搜索、进入详情及返回列表的耗时与掉帧。图片单元测试只能证明尺寸和缓存行为，不能替代电视上的性能测量。
 
-交付包的 SHA-256 位于 `output/android-tv/release-20260922/SHA256SUMS`。性能优化包签名证书 SHA-256 为 `e651cbe7acc7d8a7950b8703d386df85b24456351d0ccc2e4061fdca2343934b`。后续构建需继续使用同一个本机 debug keystore；更换机器生成的新签名无法直接覆盖安装。签名私钥不随交付目录分发。
+首页交付包的 SHA-256 位于 `output/android-tv/release-20260926/SHA256SUMS`。签名证书 SHA-256 为 `fad6b4417e67a8742a332d1e15ce2dc79a2f33b45b3c853058380cf08da94d06`。同一包名的覆盖安装需要沿用对应签名密钥；更换机器生成的新签名无法直接覆盖安装。签名私钥不随交付目录分发。

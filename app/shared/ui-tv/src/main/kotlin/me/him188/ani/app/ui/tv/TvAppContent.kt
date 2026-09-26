@@ -85,6 +85,7 @@ fun TvAppContent(
                                     onHistory = navigator::navigatePlaybackHistory,
                                     onSettings = { navigator.navigateSettings() },
                                     onLogin = navigator::navigateLogin,
+                                    onSearchTag = { navigator.navigateSubjectSearch(it) },
                                 )
                             }
                             is NavRoutes.SubjectSearch -> TvSearchScreen(subject, back, initialKeyword = route.keyword, initialTags = route.tags)
