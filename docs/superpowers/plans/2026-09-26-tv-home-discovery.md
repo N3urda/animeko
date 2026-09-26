@@ -27,4 +27,6 @@
 - [x] Run `:app:shared:ui-tv:testDebugUnitTest :app:shared:ui-tv:connectedDebugAndroidTest`; review spec compliance and code quality.
 - [x] Build `:app:android:assembleDefaultTvPreview` with ARM32 and ARM64, inspect package and signature against the latest release, and validate on the TV emulator using screenshots.
 - [x] Save actual verification results in `docs/android-tv-preview.md`.
-- [ ] Commit and push the new branch to the user's fork; upload versioned APKs/checksums/screenshots to a dated release.
+- [x] Commit and push the new branch to the user's fork; upload versioned APKs/checksums/screenshots to a dated release.
+
+**Delivery:** Build commit `2b662f1a07e2663a6fe348060552b505042e2497` on `codex/tv-home-discovery`. [Android TV home release](https://github.com/N3urda/animeko/releases/tag/android-tv-preview-20260926) contains three APKs, checksums, a package manifest, installation and validation notes, and two final screenshots. All eight uploaded assets match local sizes and SHA-256 digests.
