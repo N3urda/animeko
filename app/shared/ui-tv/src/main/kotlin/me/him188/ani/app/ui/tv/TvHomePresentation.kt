@@ -58,16 +58,12 @@ internal fun TvHomePreview(
     val surface = MaterialTheme.colorScheme.surface
     Box(
         Modifier.fillMaxWidth().height(if (compact) 88.dp else 140.dp)
-            .clip(RoundedCornerShape(14.dp)).background(surface).testTag("tv-home-preview"),
+            .clip(RoundedCornerShape(14.dp))
+            .background(Brush.horizontalGradient(listOf(surface.copy(alpha = 0.88f), surface.copy(alpha = 0.36f))))
+            .testTag("tv-home-preview"),
     ) {
-        if (!masked && !poster?.imageUrl.isNullOrBlank()) {
-            Box(Modifier.align(Alignment.CenterEnd).fillMaxWidth(0.34f).fillMaxHeight()) {
-                AsyncImage(poster?.imageUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, crossfade = false)
-                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(surface, surface.copy(alpha = 0.1f)))))
-            }
-        }
         Column(
-            Modifier.fillMaxWidth(0.79f).padding(horizontal = 16.dp, vertical = if (compact) 6.dp else 8.dp),
+            Modifier.fillMaxWidth(0.90f).padding(horizontal = 16.dp, vertical = if (compact) 6.dp else 8.dp),
             verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 3.dp),
         ) {
             Text(

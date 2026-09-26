@@ -143,7 +143,7 @@ class TvCatalogueInteractionTest {
     }
 
     @Test
-    fun homeNavigationMovesAcrossEveryEntryInOneRow() = runAniComposeUiTest {
+    fun homeNavigationMovesDownEverySidebarEntry() = runAniComposeUiTest {
         var collections = 0
         setContent {
             TvTheme {
@@ -154,15 +154,15 @@ class TvCatalogueInteractionTest {
             }
         }
         onNodeWithTag("home-search").assertIsFocused().performKeyInput {
-            keyDown(Key.DirectionRight)
-            keyUp(Key.DirectionRight)
+            keyDown(Key.DirectionDown)
+            keyUp(Key.DirectionDown)
         }
         onNodeWithTag("home-collections").assertIsFocused().performTvClick()
         runOnIdle { assertEquals(1, collections) }
         listOf("home-collections", "home-history", "home-settings").forEach { key ->
             onNodeWithTag(key).performKeyInput {
-                keyDown(Key.DirectionRight)
-                keyUp(Key.DirectionRight)
+                keyDown(Key.DirectionDown)
+                keyUp(Key.DirectionDown)
             }
         }
         onNodeWithTag("home-login").assertIsFocused()

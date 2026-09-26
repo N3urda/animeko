@@ -36,6 +36,8 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import me.him188.ani.app.data.models.preference.NsfwMode
+import me.him188.ani.app.data.models.subject.SubjectInfo
 import me.him188.ani.app.data.models.recommend.RecommendedItemInfo
 import me.him188.ani.app.data.models.recommend.RecommendedSubjectInfo
 import me.him188.ani.app.data.models.subject.FollowedSubjectInfo
@@ -66,18 +68,18 @@ class TvHomeRecommendationsPagingTest {
                 }
                 val holder = rememberSaveableStateHolder()
                 if (opened == null) holder.SaveableStateProvider("home") {
-                    RecommendationHome(flow, { opened = it })
+                    Box(Modifier.requiredSize(960.dp, 540.dp)) { RecommendationHome(flow, { opened = it }) }
                 } else TvButton("返回首页", { opened = null })
             }
         }
         onNodeWithTag("home-recommendations").performTvClick()
         waitUntil { onAllNodesWithTag("tv-subject-91001").fetchSemanticsNodes().isNotEmpty() }
-        repeat(8) { index ->
-            onNodeWithTag("tv-subject-${91001 + index}").assertIsFocused().performKeyInput {
-                keyDown(Key.DirectionRight)
-                keyUp(Key.DirectionRight)
+        listOf(91001, 91005).forEach { id ->
+            onNodeWithTag("tv-subject-$id").assertIsFocused().performKeyInput {
+                keyDown(Key.DirectionDown)
+                keyUp(Key.DirectionDown)
             }
-            waitUntil { onAllNodesWithTag("tv-subject-${91002 + index}").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil { onAllNodesWithTag("tv-subject-${id + 4}").fetchSemanticsNodes().isNotEmpty() }
         }
         onNodeWithTag("tv-subject-91009").assertIsFocused().performTvClick()
         runOnIdle { assertEquals(91009, opened); assertTrue(requests.get() >= 2) }
@@ -125,21 +127,24 @@ class TvHomeRecommendationsPagingTest {
                         }
                     }.flow
                 }
-                RecommendationHome(flow)
+                Box(Modifier.requiredSize(960.dp, 540.dp)) { RecommendationHome(flow) }
             }
         }
         onNodeWithTag("home-recommendations").performTvClick()
-        repeat(7) { index ->
-            onNodeWithTag("tv-subject-${91001 + index}").assertIsFocused().performKeyInput {
+        onNodeWithTag("tv-subject-91001").assertIsFocused().performKeyInput {
+            keyDown(Key.DirectionDown); keyUp(Key.DirectionDown)
+        }
+        repeat(3) { index ->
+            onNodeWithTag("tv-subject-${91005 + index}").assertIsFocused().performKeyInput {
                 keyDown(Key.DirectionRight)
                 keyUp(Key.DirectionRight)
             }
-            waitUntil { onAllNodesWithTag("tv-subject-${91002 + index}").fetchSemanticsNodes().isNotEmpty() }
+            waitUntil { onAllNodesWithTag("tv-subject-${91006 + index}").fetchSemanticsNodes().isNotEmpty() }
         }
         waitUntil { onAllNodesWithTag("tv-home-recommended-retry").fetchSemanticsNodes().isNotEmpty() }
         onNodeWithTag("tv-subject-91008").assertIsFocused().performKeyInput {
-            keyDown(Key.DirectionRight)
-            keyUp(Key.DirectionRight)
+            keyDown(Key.DirectionDown)
+            keyUp(Key.DirectionDown)
         }
         onNodeWithTag("tv-home-recommended-retry").assertIsFocused().performTvClick()
         waitUntil { appendAttempts.get() == 2 }
@@ -147,10 +152,75 @@ class TvHomeRecommendationsPagingTest {
         runOnIdle { nextPage.complete(Unit) }
         waitUntil { onAllNodesWithTag("tv-subject-91009").fetchSemanticsNodes().isNotEmpty() }
         onNodeWithTag("tv-subject-91008").assertIsFocused().performKeyInput {
-            keyDown(Key.DirectionRight)
-            keyUp(Key.DirectionRight)
+            keyDown(Key.DirectionDown)
+            keyUp(Key.DirectionDown)
         }
-        onNodeWithTag("tv-subject-91009").assertIsFocused()
+        onNodeWithTag("tv-subject-91012").assertIsFocused()
+    }
+
+    @Test
+    fun downWaitsForAnAppendingPartialRowAndKeepsTheClosestColumn() = runAniComposeUiTest {
+        val nextPage = CompletableDeferred<Unit>()
+        setContent {
+            TvTheme {
+                val flow = remember {
+                    recommendationPager { page ->
+                        if (page == 0) PagingSource.LoadResult.Page((1..8).map { recommendation(it) }, null, 1)
+                        else {
+                            nextPage.await()
+                            PagingSource.LoadResult.Page((9..10).map { recommendation(it) }, null, null)
+                        }
+                    }.flow
+                }
+                Box(Modifier.requiredSize(960.dp, 540.dp)) { RecommendationHome(flow) }
+            }
+        }
+        onNodeWithTag("home-recommendations").performTvClick()
+        onNodeWithTag("tv-subject-91001").performKeyInput { keyDown(Key.DirectionDown); keyUp(Key.DirectionDown) }
+        for (number in 5..7) onNodeWithTag("tv-subject-${91000 + number}").assertIsFocused().performKeyInput {
+            keyDown(Key.DirectionRight); keyUp(Key.DirectionRight)
+        }
+        onNodeWithTag("tv-subject-91008").assertIsFocused().performKeyInput {
+            keyDown(Key.DirectionDown); keyUp(Key.DirectionDown)
+        }
+        onNodeWithTag("tv-subject-91008").assertIsFocused()
+        runOnIdle { nextPage.complete(Unit) }
+        waitUntil { onAllNodesWithTag("tv-subject-91010").fetchSemanticsNodes().isNotEmpty() }
+        onNodeWithTag("tv-subject-91010").assertIsFocused()
+    }
+
+    @Test
+    fun hiddenPendingCardLetsBusinessFocusReplacementChooseItsNeighbour() = runAniComposeUiTest {
+        val nextPage = CompletableDeferred<Unit>()
+        var details by mutableStateOf(TvHomeSubjectDetails())
+        setContent {
+            TvTheme {
+                val flow = remember {
+                    recommendationPager { page ->
+                        if (page == 0) PagingSource.LoadResult.Page((1..8).map { recommendation(it) }, null, 1)
+                        else {
+                            nextPage.await()
+                            PagingSource.LoadResult.Page(emptyList(), null, null)
+                        }
+                    }.flow
+                }
+                Box(Modifier.requiredSize(960.dp, 540.dp)) {
+                    RecommendationHome(flow, details = details, preference = NsfwMode.HIDE)
+                }
+            }
+        }
+        onNodeWithTag("home-recommendations").performTvClick()
+        onNodeWithTag("tv-subject-91001").performKeyInput { keyDown(Key.DirectionDown); keyUp(Key.DirectionDown) }
+        for (number in 5..7) onNodeWithTag("tv-subject-${91000 + number}").assertIsFocused().performKeyInput {
+            keyDown(Key.DirectionRight); keyUp(Key.DirectionRight)
+        }
+        onNodeWithTag("tv-subject-91008").assertIsFocused().performKeyInput {
+            keyDown(Key.DirectionDown); keyUp(Key.DirectionDown)
+        }
+        runOnIdle { details = TvHomeSubjectDetails(91008, SubjectInfo.Empty.copy(subjectId = 91008, nsfw = true)) }
+        onNodeWithTag("tv-subject-91008").assertDoesNotExist()
+        runOnIdle { nextPage.complete(Unit) }
+        onNodeWithTag("tv-subject-91007").assertIsFocused()
     }
 
     @Test
@@ -188,14 +258,77 @@ class TvHomeRecommendationsPagingTest {
         }
         onNodeWithTag("home-recommendations").performTvClick()
         onNodeWithText("正在加载推荐…").assertExists()
-        onNodeWithTag("home-recommendations").assertIsFocused().performKeyInput {
-            keyDown(Key.DirectionLeft)
-            keyUp(Key.DirectionLeft)
+        listOf("home-recommendations", "home-search", "home-collections", "home-history", "home-settings").forEach { key ->
+            onNodeWithTag(key).assertIsFocused().performKeyInput {
+                keyDown(Key.DirectionDown)
+                keyUp(Key.DirectionDown)
+            }
         }
         onNodeWithTag("home-login").assertIsFocused()
         runOnIdle { loaded.complete(Unit) }
         waitUntil { onAllNodesWithTag("tv-subject-91001").fetchSemanticsNodes().isNotEmpty() }
         onNodeWithTag("home-login").assertIsFocused()
+    }
+
+    @Test
+    fun standardGridKeepsRowBoundariesAndReturnsFromSidebar() = verifyGridNavigation(960, 540, 4)
+
+    @Test
+    fun compactGridKeepsRowBoundariesAndReturnsFromSidebar() = verifyGridNavigation(720, 405, 3)
+
+    private fun verifyGridNavigation(width: Int, height: Int, columns: Int) = runAniComposeUiTest {
+        setContent {
+            TvTheme {
+                val flow = remember { flowOf(PagingData.from<RecommendedItemInfo>((1..10).map { recommendation(it) })) }
+                Box(Modifier.requiredSize(width.dp, height.dp)) { RecommendationHome(flow) }
+            }
+        }
+        val navigation = listOf("home-overview", "home-recommendations", "home-search", "home-collections", "home-history", "home-settings", "home-login")
+        val viewport = onNodeWithTag("tv-home-content-viewport").getUnclippedBoundsInRoot()
+        assertTrue("All sidebar actions fit the viewport", onNodeWithTag("home-login").getUnclippedBoundsInRoot().bottom <= viewport.bottom)
+        navigation.zipWithNext().forEach { (previous, next) ->
+            val first = onNodeWithTag(previous).getUnclippedBoundsInRoot()
+            val second = onNodeWithTag(next).getUnclippedBoundsInRoot()
+            assertTrue("Navigation belongs to the left sidebar", first.right < viewport.left)
+            assertTrue("Navigation flows vertically", first.bottom <= second.top)
+        }
+        onNodeWithTag("home-recommendations").performTvClick()
+        onNodeWithTag("tv-subject-91001").assertIsFocused().performKeyInput {
+            keyDown(Key.DirectionLeft); keyUp(Key.DirectionLeft)
+        }
+        onNodeWithTag("home-recommendations").assertIsFocused().performKeyInput {
+            keyDown(Key.DirectionRight); keyUp(Key.DirectionRight)
+        }
+        for (number in 1..columns) {
+            onNodeWithTag("tv-subject-${91000 + number}").assertIsFocused().performKeyInput {
+                keyDown(Key.DirectionRight); keyUp(Key.DirectionRight)
+            }
+        }
+        onNodeWithTag("tv-subject-${91000 + columns}").assertIsFocused().performKeyInput {
+            keyDown(Key.DirectionDown); keyUp(Key.DirectionDown)
+        }
+        onNodeWithTag("tv-subject-${91000 + columns * 2}").assertIsFocused().performKeyInput {
+            keyDown(Key.DirectionDown); keyUp(Key.DirectionDown)
+        }
+        val thirdRow = minOf(columns * 3, 10)
+        onNodeWithTag("tv-subject-${91000 + thirdRow}").assertIsFocused()
+        if (thirdRow < 10) onNodeWithTag("tv-subject-${91000 + thirdRow}").performKeyInput {
+            keyDown(Key.DirectionDown); keyUp(Key.DirectionDown)
+        }
+        onNodeWithTag("tv-subject-91010").assertIsFocused().performKeyInput {
+            keyDown(Key.DirectionRight); keyUp(Key.DirectionRight)
+        }
+        onNodeWithTag("tv-subject-91010").assertIsFocused()
+        val lastRowFirst = (9 / columns) * columns + 1
+        for (number in 10 downTo lastRowFirst) {
+            onNodeWithTag("tv-subject-${91000 + number}").assertIsFocused().performKeyInput {
+                keyDown(Key.DirectionLeft); keyUp(Key.DirectionLeft)
+            }
+        }
+        onNodeWithTag("home-recommendations").assertIsFocused().performKeyInput {
+            keyDown(Key.DirectionRight); keyUp(Key.DirectionRight)
+        }
+        onNodeWithTag("tv-subject-${91000 + lastRowFirst}").assertIsFocused()
     }
 
     @Test
@@ -223,11 +356,16 @@ class TvHomeRecommendationsPagingTest {
 }
 
 @Composable
-private fun RecommendationHome(flow: Flow<PagingData<RecommendedItemInfo>>, onSubject: (Int) -> Unit = {}) {
+private fun RecommendationHome(
+    flow: Flow<PagingData<RecommendedItemInfo>>,
+    onSubject: (Int) -> Unit = {},
+    details: TvHomeSubjectDetails = TvHomeSubjectDetails(),
+    preference: NsfwMode = NsfwMode.DISPLAY,
+) {
     val followed = remember { flowOf(PagingData.empty<FollowedSubjectInfo>()) }.collectAsLazyPagingItems()
     val trending = remember { flowOf(PagingData.from(listOf(TrendingSubjectInfo(90001, "热门番剧条目", "")))) }.collectAsLazyPagingItems()
     val recommendations = flow.collectAsLazyPagingItems()
-    TvHomeCatalogue(followed, trending, recommendations, onSubject, {}, {}, {}, {}, {})
+    TvHomeCatalogue(followed, trending, recommendations, onSubject, {}, {}, {}, {}, {}, details = details, preference = preference)
 }
 
 private fun recommendation(number: Int) = RecommendedSubjectInfo(91000 + number, "推荐番剧 $number", "")

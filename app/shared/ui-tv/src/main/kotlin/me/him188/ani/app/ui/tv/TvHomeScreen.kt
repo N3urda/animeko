@@ -12,6 +12,7 @@ package me.him188.ani.app.ui.tv
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -19,10 +20,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -35,6 +41,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -107,10 +117,9 @@ internal fun TvHomeCatalogue(
     onSearchTag: (String) -> Unit = {},
 ) {
     val focus = rememberTvFocusState("home-awaiting-content")
-    val outer = rememberLazyListState()
+    val outer = rememberLazyGridState()
     val trendingRow = rememberLazyListState()
     val followedRow = rememberLazyListState()
-    val recommendedRow = rememberLazyListState()
     val scheduleRow = rememberLazyListState()
     val genreRow = rememberLazyListState()
     var classifications by rememberSaveable { mutableStateOf<Map<Int, Boolean>>(emptyMap()) }
@@ -175,55 +184,98 @@ internal fun TvHomeCatalogue(
     val hasFollowed = followedEntries.isNotEmpty()
     val followedError = followed.loadState.refresh is LoadState.Error || followed.loadState.append is LoadState.Error
     val trendingIndex = if (hasFollowed) 1 else 0
-    val recommendedIndex = trendingIndex + 1
+    val scheduleIndex = trendingIndex + 1
+    val genresIndex = scheduleIndex + 1
+    val followedErrorIndex = genresIndex + 1
+    val recommendedHeadingIndex = followedErrorIndex + if (!hasFollowed && followedError) 1 else 0
+    val recommendedStartIndex = recommendedHeadingIndex + 1
+    val overviewGroups = buildList {
+        if (hasFollowed) add("followed:")
+        addAll(listOf("trending:", "schedule:", "genre:"))
+        if (!hasFollowed && followedError) add("followed:")
+    }
+    val recommendationPreviousKey = if (!hasFollowed && followedError) "followed:retry" else "genre:${tvHomeGenres.first()}"
     TvHomeRailFocus(focus, "trending:", trendingEntries, trending, outer, trendingIndex, trendingRow)
-    TvHomeRailFocus(focus, "followed:", followedEntries, followed, outer, if (hasFollowed) 0 else recommendedIndex + 3, followedRow)
-    TvHomeRailFocus(
-        focus, "recommended:", recommendedEntries, recommendations, outer, recommendedIndex, recommendedRow,
+    TvHomeRailFocus(focus, "followed:", followedEntries, followed, outer, if (hasFollowed) 0 else followedErrorIndex, followedRow)
+    val recommendationError = recommendations.loadState.refresh is LoadState.Error || recommendations.loadState.append is LoadState.Error
+    val recommendationLoading = recommendations.loadState.refresh is LoadState.Loading
+    TvHomePagingFocus(
+        focus, "recommended:", recommendedEntries, recommendations,
         refreshWhenEmpty = true, fallbackKey = "home-recommendations",
+        scrollToItem = { outer.scrollToItem(recommendedStartIndex + it) },
+        isItemVisible = { key -> outer.layoutInfo.visibleItemsInfo.any { it.key == key } },
     )
-    val awaitingRecommendations = recommendedEntries.isEmpty() && recommendations.loadState.refresh is LoadState.Loading
-    LaunchedEffect(focus.requestedKey, awaitingRecommendations, recommendedIndex) {
-        if (focus.requestedKey.startsWith("recommended:") && awaitingRecommendations) {
-            outer.scrollToItem(recommendedIndex)
+    LaunchedEffect(focus.requestedKey, recommendationLoading, recommendedHeadingIndex) {
+        if (focus.requestedKey.startsWith("recommended:") && recommendedEntries.isEmpty() && recommendationLoading) {
+            outer.scrollToItem(recommendedHeadingIndex)
         }
     }
-    val scheduleIndex = recommendedIndex + 1
-    val genresIndex = scheduleIndex + 1
     TvLazyFocusGroup(
         focus, "schedule:", scheduleEntries.map { "schedule:${it.id}" } + if (schedule.failed) listOf("schedule:retry") else emptyList(),
-        !schedule.loading, "home-search",
+        !schedule.loading, "home-overview",
         scrollToItem = { outer.scrollToItem(scheduleIndex); scheduleRow.scrollToItem(it) },
         isItemVisible = { key -> scheduleRow.layoutInfo.visibleItemsInfo.any { it.key == key } },
     )
     TvLazyFocusGroup(
-        focus, "genre:", tvHomeGenres.map { "genre:$it" }, true, "home-search",
+        focus, "genre:", tvHomeGenres.map { "genre:$it" }, true, "home-overview",
         scrollToItem = { outer.scrollToItem(genresIndex); genreRow.scrollToItem(it) },
         isItemVisible = { key -> genreRow.layoutInfo.visibleItemsInfo.any { it.key == key } },
     )
+    val overviewKey = followedEntries.firstOrNull()?.poster?.id?.let { "followed:$it" }
+        ?: trendingEntries.firstOrNull()?.poster?.id?.let { "trending:$it" }
+        ?: scheduleEntries.firstOrNull()?.id?.let { "schedule:$it" } ?: "genre:${tvHomeGenres.first()}"
+    var rememberedContentKey by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(focus.requestedKey) {
+        if (focus.requestedKey.contains(':')) rememberedContentKey = focus.requestedKey
+    }
     TvCatalogueHomeLayout(
         onSearch, onCollections, onHistory, onSettings, onLogin, focus, modifier,
+        onOverview = { focus.requestFocus(overviewKey) },
         onRecommendations = { focus.requestFocus("recommended:") },
+        onEnterContent = { focus.requestFocus(rememberedContentKey ?: overviewKey) },
+        backdrop = { TvHomeBackdrop(preview, details, preference, Modifier.fillMaxSize()) },
         preview = { compact -> TvHomePreview(preview, previewSource, details, preference, compact) },
     ) { compact ->
-        LazyColumn(
-            Modifier.fillMaxSize(), state = outer,
+        val columns = if (compact) 3 else 4
+        var pendingDownFrom by remember { mutableStateOf<Int?>(null) }
+        LaunchedEffect(pendingDownFrom, recommendedEntries, recommendationError, focus.requestedKey,
+            recommendations.loadState.append.endOfPaginationReached, columns) {
+            val origin = pendingDownFrom ?: return@LaunchedEffect
+            if (focus.requestedKey != "recommended:$origin") {
+                pendingDownFrom = null
+                return@LaunchedEffect
+            }
+            val index = recommendedEntries.indexOfFirst { it.poster.id == origin }
+            if (index < 0) {
+                pendingDownFrom = null
+                return@LaunchedEffect
+            }
+            val next = recommendedEntries.getOrNull(index + columns)
+                ?: recommendedEntries.lastOrNull()?.takeIf { index / columns < recommendedEntries.lastIndex / columns }
+            when {
+                next != null -> { pendingDownFrom = null; focus.requestFocus("recommended:${next.poster.id}") }
+                recommendationError -> { pendingDownFrom = null; focus.requestFocus("recommended:retry") }
+                recommendations.loadState.append.endOfPaginationReached -> pendingDownFrom = null
+            }
+        }
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columns),
+            modifier = Modifier.fillMaxSize().testTag("tv-home-grid").onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown || focus.requestedKey.startsWith("recommended:")) false
+                else tvHomeOverviewNavigation(focus, event.key, overviewGroups)
+            },
+            state = outer,
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(bottom = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 20.dp),
         ) {
-            if (hasFollowed) item(key = "followed:") {
+            if (hasFollowed) item(key = "followed:", span = { GridItemSpan(maxLineSpan) }) {
                 TvPosterRail("继续追番", followed, followedEntries, followedRow, focus, "followed:", onSubject, "", compact)
             }
-            item(key = "trending:") {
+            item(key = "trending:", span = { GridItemSpan(maxLineSpan) }) {
                 TvPosterRail("热门番剧", trending, trendingEntries, trendingRow, focus, "trending:", onSubject, "暂无热门番剧", compact)
             }
-            item(key = "recommended:") {
-                TvPosterRail(
-                    "推荐番剧", recommendations, recommendedEntries, recommendedRow, focus, "recommended:",
-                    onSubject, "暂无推荐番剧", compact, refreshWhenEmpty = true, loadingTitle = "正在加载推荐…",
-                )
-            }
-            item(key = "schedule:") {
+            item(key = "schedule:", span = { GridItemSpan(maxLineSpan) }) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     TvHomeSectionHeading("今日更新", "播出时间表 · 以实际片源为准")
                     if (scheduleEntries.isEmpty()) Text(
@@ -245,7 +297,7 @@ internal fun TvHomeCatalogue(
                     }
                 }
             }
-            item(key = "genre:") {
+            item(key = "genre:", span = { GridItemSpan(maxLineSpan) }) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     TvHomeSectionHeading("按类型找番", "选择分类后，可继续添加设定与年份条件")
                     LazyRow(state = genreRow, contentPadding = PaddingValues(6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -255,8 +307,67 @@ internal fun TvHomeCatalogue(
                     }
                 }
             }
-            if (!hasFollowed && followedError) item(key = "followed:") {
+            if (!hasFollowed && followedError) item(key = "followed:", span = { GridItemSpan(maxLineSpan) }) {
                 TvPosterRail("追番内容加载失败", followed, followedEntries, followedRow, focus, "followed:", onSubject, "", compact)
+            }
+            item(key = "recommended-heading", span = { GridItemSpan(maxLineSpan) }) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TvHomeSectionHeading("推荐番剧", "上下浏览更多番剧")
+                    if (recommendedEntries.isEmpty()) Text(
+                        when {
+                            recommendationError -> "加载失败，请检查网络后重试。"
+                            recommendationLoading -> "正在加载推荐…"
+                            else -> "暂无推荐番剧"
+                        }, fontSize = 20.sp,
+                    )
+                }
+            }
+            itemsIndexed(recommendedEntries, key = { _, entry -> "recommended:${entry.poster.id}" }) { index, entry ->
+                recommendations[entry.pagingIndex]
+                TvHomePosterCard(
+                    entry.poster, { onSubject(entry.poster.id) },
+                    Modifier.fillMaxWidth().tvFocusTarget("recommended:${entry.poster.id}", focus)
+                        .onPreviewKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown) false else {
+                                val target = when (event.key) {
+                                    Key.DirectionLeft -> if (index % columns == 0) "home-recommendations" else "recommended:${recommendedEntries[index - 1].poster.id}"
+                                    Key.DirectionRight -> if (index % columns < columns - 1) recommendedEntries.getOrNull(index + 1)?.let { "recommended:${it.poster.id}" } else null
+                                    Key.DirectionUp -> if (index >= columns) "recommended:${recommendedEntries[index - columns].poster.id}" else recommendationPreviousKey
+                                    Key.DirectionDown -> when {
+                                        index + columns < recommendedEntries.size -> "recommended:${recommendedEntries[index + columns].poster.id}"
+                                        index / columns < recommendedEntries.lastIndex / columns -> "recommended:${recommendedEntries.last().poster.id}"
+                                        recommendationError -> "recommended:retry"
+                                        else -> {
+                                            if (!recommendations.loadState.append.endOfPaginationReached) {
+                                                pendingDownFrom = entry.poster.id
+                                                recommendations[recommendedEntries.last().pagingIndex]
+                                            }
+                                            null
+                                        }
+                                    }
+                                    else -> return@onPreviewKeyEvent false
+                                }
+                                if (target != null) focus.requestFocus(target)
+                                true
+                            }
+                        }, compact = compact,
+                )
+            }
+            if (recommendationError) item(key = "recommended:retry", span = { GridItemSpan(maxLineSpan) }) {
+                TvButton("重试", {
+                    val target = recommendedEntries.lastOrNull()?.poster?.id?.let { "recommended:$it" } ?: "recommended:"
+                    focus.requestFocus(target)
+                    if (recommendedEntries.isNotEmpty()) focus.nodes[target]?.requestFocus()
+                    recommendations.retry()
+                }, Modifier.tvFocusTarget("recommended:retry", focus).testTag("tv-home-recommended-retry")
+                    .tvHomeRecommendationFooterKeys(focus, recommendedEntries, recommendationPreviousKey))
+            } else if (recommendedEntries.isEmpty() && !recommendationLoading) item(key = "recommended:refresh", span = { GridItemSpan(maxLineSpan) }) {
+                TvButton("刷新推荐", { focus.requestFocus("recommended:"); recommendations.refresh() },
+                    Modifier.tvFocusTarget("recommended:refresh", focus).testTag("tv-home-recommended-refresh")
+                        .tvHomeRecommendationFooterKeys(focus, recommendedEntries, recommendationPreviousKey))
+            }
+            if (recommendations.loadState.append is LoadState.Loading && recommendedEntries.isNotEmpty()) {
+                item(key = "recommended:loading", span = { GridItemSpan(maxLineSpan) }) { Text("正在加载更多…", fontSize = 20.sp) }
             }
         }
     }
@@ -273,6 +384,9 @@ internal fun TvCatalogueHomeLayout(
     focus: TvFocusState,
     modifier: Modifier = Modifier,
     onRecommendations: (() -> Unit)? = null,
+    onOverview: (() -> Unit)? = null,
+    onEnterContent: (() -> Unit)? = null,
+    backdrop: @Composable () -> Unit = {},
     preview: @Composable (Boolean) -> Unit = {},
     content: @Composable (compact: Boolean) -> Unit,
 ) {
@@ -280,18 +394,22 @@ internal fun TvCatalogueHomeLayout(
         TvRestorePageFocus(focus)
         BoxWithConstraints(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             val compact = maxHeight < 460.dp
-            Column(
+            backdrop()
+            Row(
                 Modifier.fillMaxSize().onPreviewKeyEvent { focus.onNavigationKey(it); false }
-                    .padding(horizontal = if (maxWidth < 800.dp) 28.dp else 40.dp, vertical = if (compact) 12.dp else 16.dp),
-                verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 6.dp),
+                    .padding(horizontal = if (compact) 16.dp else 24.dp, vertical = if (compact) 12.dp else 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 16.dp),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Animeko", Modifier.width(if (compact) 84.dp else 100.dp), fontSize = if (compact) 20.sp else 24.sp,
+                Column(Modifier.width(if (compact) 96.dp else 112.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Animeko", Modifier.padding(vertical = 4.dp), fontSize = if (compact) 20.sp else 24.sp,
                         color = MaterialTheme.colorScheme.primary)
-                    TvCatalogueHomeNavigation(onSearch, onCollections, onHistory, onSettings, onLogin, focus, onRecommendations)
+                    TvCatalogueHomeNavigation(onSearch, onCollections, onHistory, onSettings, onLogin, focus,
+                        onRecommendations, onOverview, onEnterContent, compact)
                 }
-                preview(compact)
-                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().testTag("tv-home-content-viewport")) { content(compact) }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    preview(compact)
+                    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().testTag("tv-home-content-viewport")) { content(compact) }
+                }
             }
         }
     }
@@ -306,17 +424,31 @@ internal fun TvCatalogueHomeNavigation(
     onLogin: () -> Unit,
     focus: TvFocusState,
     onRecommendations: (() -> Unit)? = null,
+    onOverview: (() -> Unit)? = null,
+    onEnterContent: (() -> Unit)? = null,
+    compact: Boolean = false,
 ) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        val navigation = listOf(
-            Triple("搜索", "home-search", onSearch),
-            Triple(if (onRecommendations == null) "我的收藏" else "收藏", "home-collections", onCollections),
-            Triple(if (onRecommendations == null) "观看历史" else "历史", "home-history", onHistory),
-            Triple("设置", "home-settings", onSettings),
-            Triple("账号", "home-login", onLogin),
-        ) + if (onRecommendations != null) listOf(Triple("推荐", "home-recommendations", onRecommendations)) else emptyList()
-        navigation.forEach { (label, key, action) ->
-            TvButton(label, action, Modifier.weight(1f).tvFocusTarget(key, focus).testTag(key))
+    Column(Modifier.fillMaxWidth().testTag("tv-home-sidebar"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        val navigation = buildList {
+            if (onOverview != null) add(Triple("首页", "home-overview", onOverview))
+            if (onRecommendations != null) add(Triple("推荐", "home-recommendations", onRecommendations))
+            add(Triple("搜索", "home-search", onSearch))
+            add(Triple("收藏", "home-collections", onCollections))
+            add(Triple("历史", "home-history", onHistory))
+            add(Triple("设置", "home-settings", onSettings))
+            add(Triple("账号", "home-login", onLogin))
+        }
+        navigation.forEachIndexed { index, (label, key, action) ->
+            TvButton(label, action, Modifier.fillMaxWidth().height(if (compact) 40.dp else 48.dp)
+                .tvFocusTarget(key, focus).testTag(key).onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) false else when (event.key) {
+                        Key.DirectionUp -> { navigation.getOrNull(index - 1)?.let { focus.requestFocus(it.second) }; true }
+                        Key.DirectionDown -> { navigation.getOrNull(index + 1)?.let { focus.requestFocus(it.second) }; true }
+                        Key.DirectionRight -> { onEnterContent?.invoke(); onEnterContent != null }
+                        Key.DirectionLeft -> true
+                        else -> false
+                    }
+                })
         }
     }
 }
@@ -338,8 +470,26 @@ internal fun <T : Any> LazyPagingItems<T>.tvRailPosters(poster: (T) -> TvPoster)
 @Composable
 private fun <T : Any> TvHomeRailFocus(
     focus: TvFocusState, group: String, entries: List<TvRailPoster>, pager: LazyPagingItems<T>,
-    outer: LazyListState, outerIndex: Int, row: LazyListState,
+    outer: LazyGridState, outerIndex: Int, row: LazyListState,
     refreshWhenEmpty: Boolean = false, fallbackKey: String = "home-search",
+) {
+    TvHomePagingFocus(
+        focus, group, entries, pager, refreshWhenEmpty, fallbackKey,
+        scrollToItem = {
+            outer.scrollToItem(outerIndex)
+            snapshotFlow { outer.layoutInfo.visibleItemsInfo.any { item -> item.key == group } }.first { it }
+            row.scrollToItem(it)
+        },
+        isItemVisible = { key -> row.layoutInfo.visibleItemsInfo.any { it.key == key } },
+    )
+}
+
+@Composable
+private fun <T : Any> TvHomePagingFocus(
+    focus: TvFocusState, group: String, entries: List<TvRailPoster>, pager: LazyPagingItems<T>,
+    refreshWhenEmpty: Boolean = false, fallbackKey: String = "home-search",
+    scrollToItem: suspend (Int) -> Unit,
+    isItemVisible: (String) -> Boolean,
 ) {
     val error = pager.loadState.refresh is LoadState.Error || pager.loadState.append is LoadState.Error
     val ready = entries.isNotEmpty() || pager.loadState.refresh !is LoadState.Loading
@@ -356,12 +506,8 @@ private fun <T : Any> TvHomeRailFocus(
     var recoveryFinished by remember(pager, requestedId, needsTargetPage) { mutableStateOf(false) }
     TvLazyFocusGroup(
         focus, group, keys, ready && (!needsTargetPage || recoveryFinished), fallbackKey,
-        scrollToItem = {
-            outer.scrollToItem(outerIndex)
-            snapshotFlow { outer.layoutInfo.visibleItemsInfo.any { item -> item.key == group } }.first { it }
-            row.scrollToItem(it)
-        },
-        isItemVisible = { key -> row.layoutInfo.visibleItemsInfo.any { it.key == key } },
+        scrollToItem = scrollToItem,
+        isItemVisible = isItemVisible,
     )
     LaunchedEffect(pager, requestedId, needsTargetPage) {
         if (needsTargetPage) {

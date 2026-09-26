@@ -44,12 +44,20 @@ import org.junit.Test
 @OptIn(ExperimentalTestApi::class)
 class TvHomeDiscoveryTest {
     @Test
-    fun standardHomeShowsTwoCompleteContentRows() = runAniComposeUiTest {
-        setContent { TvTheme { Box(Modifier.requiredSize(960.dp, 540.dp)) { DiscoveryHome() } } }
+    fun standardHomeShowsTwoCompleteOverviewRows() = runAniComposeUiTest {
+        setContent {
+            TvTheme {
+                Box(Modifier.requiredSize(960.dp, 540.dp)) {
+                    DiscoveryHome(schedule = TvHomeScheduleState((1..4).map {
+                        TvHomeScheduleItem(92000 + it, "今日番剧 $it", "", "12:00")
+                    }, loading = false))
+                }
+            }
+        }
         waitUntil { onAllNodesWithTag("tv-subject-90001").fetchSemanticsNodes().isNotEmpty() }
         onNodeWithTag("tv-subject-90001").assertIsFocused()
         val viewport = onNodeWithTag("tv-home-content-viewport").getUnclippedBoundsInRoot()
-        listOf(90001, 90003, 91001, 91003).forEach { id ->
+        listOf(90001, 90003, 92001, 92003).forEach { id ->
             val card = onNodeWithTag("tv-subject-$id").getUnclippedBoundsInRoot()
             assertTrue("Card $id must be fully visible on the home screen", card.top >= viewport.top && card.bottom <= viewport.bottom)
         }
@@ -81,12 +89,42 @@ class TvHomeDiscoveryTest {
         onNodeWithTag("tv-subject-90001").assertIsFocused().performKeyInput {
             keyDown(Key.DirectionDown); keyUp(Key.DirectionDown)
         }
-        onNodeWithTag("tv-subject-91001").assertIsFocused().performKeyInput {
-            keyDown(Key.DirectionDown); keyUp(Key.DirectionDown)
-        }
         onNodeWithTag("tv-home-genre-科幻").assertIsFocused().performTvClick()
         runOnIdle { assertEquals("科幻", opened) }
         onNodeWithText("返回首页").performTvClick()
+        onNodeWithTag("tv-home-genre-科幻").assertIsFocused()
+    }
+
+    @Test
+    fun homeOverviewTargetsTheFirstAvailableSchedule() = runAniComposeUiTest {
+        setContent {
+            TvTheme {
+                DiscoveryHome(trendingAvailable = false,
+                    schedule = TvHomeScheduleState(listOf(TvHomeScheduleItem(17, "今日番剧", "", "12:00")), loading = false))
+            }
+        }
+        onNodeWithTag("home-overview").performTvClick()
+        onNodeWithTag("tv-subject-17").assertIsFocused()
+    }
+
+    @Test
+    fun failedFollowedSectionParticipatesInOverviewNavigationOrder() = runAniComposeUiTest {
+        setContent { TvTheme { DiscoveryHome(followedFailed = true) } }
+        onNodeWithTag("tv-subject-90001").assertIsFocused().performKeyInput {
+            keyDown(Key.DirectionDown); keyUp(Key.DirectionDown)
+        }
+        onNodeWithTag("tv-home-genre-科幻").assertIsFocused().performKeyInput {
+            keyDown(Key.DirectionDown); keyUp(Key.DirectionDown)
+        }
+        onNodeWithTag("tv-home-followed-retry").assertIsFocused().performKeyInput {
+            keyDown(Key.DirectionDown); keyUp(Key.DirectionDown)
+        }
+        onNodeWithTag("tv-subject-91001").assertIsFocused().performKeyInput {
+            keyDown(Key.DirectionUp); keyUp(Key.DirectionUp)
+        }
+        onNodeWithTag("tv-home-followed-retry").assertIsFocused().performKeyInput {
+            keyDown(Key.DirectionUp); keyUp(Key.DirectionUp)
+        }
         onNodeWithTag("tv-home-genre-科幻").assertIsFocused()
     }
 
@@ -143,8 +181,7 @@ class TvHomeDiscoveryTest {
                 )
             }
         }
-        onNodeWithTag("home-recommendations").performTvClick()
-        onNodeWithTag("tv-subject-91001").assertIsFocused().performKeyInput {
+        onNodeWithTag("tv-subject-90001").assertIsFocused().performKeyInput {
             keyDown(Key.DirectionDown); keyUp(Key.DirectionDown)
         }
         onNodeWithTag("tv-subject-17").assertIsFocused()
@@ -197,11 +234,16 @@ private fun DiscoveryHome(
     schedule: TvHomeScheduleState = TvHomeScheduleState(loading = false),
     details: TvHomeSubjectDetails = TvHomeSubjectDetails(),
     preference: NsfwMode = NsfwMode.DISPLAY,
+    trendingAvailable: Boolean = true,
+    followedFailed: Boolean = false,
 ) {
     val idle = remember { LoadStates(LoadState.NotLoading(true), LoadState.NotLoading(true), LoadState.NotLoading(true)) }
-    val followed = remember { flowOf(PagingData.from(emptyList<FollowedSubjectInfo>(), idle)) }.collectAsLazyPagingItems()
-    val trending = remember {
-        flowOf(PagingData.from((1..10).map { TrendingSubjectInfo(90000 + it, "热门番剧 $it", "") }, idle))
+    val followed = remember(followedFailed) {
+        flowOf(PagingData.from(emptyList<FollowedSubjectInfo>(),
+            if (followedFailed) idle.copy(refresh = LoadState.Error(IllegalStateException("offline"))) else idle))
+    }.collectAsLazyPagingItems()
+    val trending = remember(trendingAvailable) {
+        flowOf(PagingData.from(if (trendingAvailable) (1..10).map { TrendingSubjectInfo(90000 + it, "热门番剧 $it", "") } else emptyList(), idle))
     }.collectAsLazyPagingItems()
     val recommended = remember {
         flowOf(PagingData.from<RecommendedItemInfo>((1..10).map { RecommendedSubjectInfo(91000 + it, "推荐番剧 $it", "") }, idle))

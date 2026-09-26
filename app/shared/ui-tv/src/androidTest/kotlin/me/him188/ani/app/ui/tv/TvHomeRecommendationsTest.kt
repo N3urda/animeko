@@ -31,7 +31,7 @@ import org.junit.Test
 @OptIn(ExperimentalTestApi::class)
 class TvHomeRecommendationsTest {
     @Test
-    fun remoteReachesRecommendationAnchorFromPopularCardsAndEntersItsRail() = runAniComposeUiTest {
+    fun remoteReachesRecommendationAnchorFromPopularCardsAndEntersItsGrid() = runAniComposeUiTest {
         setContent {
             TvTheme {
                 val idle = remember { LoadStates(LoadState.NotLoading(true), LoadState.NotLoading(true), LoadState.NotLoading(true)) }
@@ -49,14 +49,12 @@ class TvHomeRecommendationsTest {
         }
         waitUntil { onAllNodesWithTag("tv-subject-90001").fetchSemanticsNodes().isNotEmpty() }
         onNodeWithTag("tv-subject-90001").assertIsFocused().performKeyInput {
-            keyDown(Key.DirectionUp)
-            keyUp(Key.DirectionUp)
+            keyDown(Key.DirectionLeft)
+            keyUp(Key.DirectionLeft)
         }
-        listOf("home-search", "home-collections", "home-history", "home-settings", "home-login").forEach { key ->
-            onNodeWithTag(key).assertIsFocused().performKeyInput {
-                keyDown(Key.DirectionRight)
-                keyUp(Key.DirectionRight)
-            }
+        onNodeWithTag("home-overview").assertIsFocused().performKeyInput {
+            keyDown(Key.DirectionDown)
+            keyUp(Key.DirectionDown)
         }
         onNodeWithTag("home-recommendations").assertIsFocused().performKeyInput {
             keyDown(Key.DirectionCenter)
