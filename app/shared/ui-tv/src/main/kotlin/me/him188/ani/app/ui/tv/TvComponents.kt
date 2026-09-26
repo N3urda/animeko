@@ -110,9 +110,13 @@ fun TvPage(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     CompositionLocalProvider(LocalTvFocusState provides focusState) {
+        TvBindShellPage(focusState)
         TvRestorePageFocus(focusState)
+        val inShell = LocalTvShell.current != null
         BoxWithConstraints(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            val horizontalPadding = if (maxWidth < 800.dp) 32.dp else 48.dp
+            val horizontalPadding = if (inShell) {
+                if (maxWidth < 640.dp) 16.dp else 24.dp
+            } else if (maxWidth < 800.dp) 32.dp else 48.dp
             Column(
                 Modifier.fillMaxSize().onPreviewKeyEvent { focusState.onNavigationKey(it); false }
                     .padding(horizontal = horizontalPadding, vertical = 24.dp),

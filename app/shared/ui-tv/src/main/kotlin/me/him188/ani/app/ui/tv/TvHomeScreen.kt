@@ -12,7 +12,6 @@ package me.him188.ani.app.ui.tv
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -224,15 +223,10 @@ internal fun TvHomeCatalogue(
     val overviewKey = followedEntries.firstOrNull()?.poster?.id?.let { "followed:$it" }
         ?: trendingEntries.firstOrNull()?.poster?.id?.let { "trending:$it" }
         ?: scheduleEntries.firstOrNull()?.id?.let { "schedule:$it" } ?: "genre:${tvHomeGenres.first()}"
-    var rememberedContentKey by rememberSaveable { mutableStateOf<String?>(null) }
-    LaunchedEffect(focus.requestedKey) {
-        if (focus.requestedKey.contains(':')) rememberedContentKey = focus.requestedKey
-    }
     TvCatalogueHomeLayout(
         onSearch, onCollections, onHistory, onSettings, onLogin, focus, modifier,
         onOverview = { focus.requestFocus(overviewKey) },
         onRecommendations = { focus.requestFocus("recommended:") },
-        onEnterContent = { focus.requestFocus(rememberedContentKey ?: overviewKey) },
         backdrop = { TvHomeBackdrop(preview, details, preference, Modifier.fillMaxSize()) },
         preview = { compact -> TvHomePreview(preview, previewSource, details, preference, compact) },
     ) { compact ->
@@ -385,70 +379,58 @@ internal fun TvCatalogueHomeLayout(
     modifier: Modifier = Modifier,
     onRecommendations: (() -> Unit)? = null,
     onOverview: (() -> Unit)? = null,
-    onEnterContent: (() -> Unit)? = null,
     backdrop: @Composable () -> Unit = {},
     preview: @Composable (Boolean) -> Unit = {},
     content: @Composable (compact: Boolean) -> Unit,
 ) {
-    CompositionLocalProvider(LocalTvFocusState provides focus) {
-        TvRestorePageFocus(focus)
-        BoxWithConstraints(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            val compact = maxHeight < 460.dp
-            backdrop()
-            Row(
-                Modifier.fillMaxSize().onPreviewKeyEvent { focus.onNavigationKey(it); false }
-                    .padding(horizontal = if (compact) 16.dp else 24.dp, vertical = if (compact) 12.dp else 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 16.dp),
-            ) {
-                Column(Modifier.width(if (compact) 96.dp else 112.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Animeko", Modifier.padding(vertical = 4.dp), fontSize = if (compact) 20.sp else 24.sp,
-                        color = MaterialTheme.colorScheme.primary)
-                    TvCatalogueHomeNavigation(onSearch, onCollections, onHistory, onSettings, onLogin, focus,
-                        onRecommendations, onOverview, onEnterContent, compact)
+    val shell = LocalTvShell.current
+    if (shell == null) {
+        val standaloneShell = remember { TvAppShellState() }
+        TvAppShell(
+            selectedKey = standaloneShell.homeAnchor,
+            onSelect = { key ->
+                when (key) {
+                    "home-overview", "home-recommendations" -> standaloneShell.openHomeAnchor(key)
+                    "home-search" -> onSearch()
+                    "home-collections" -> onCollections()
+                    "home-history" -> onHistory()
+                    "home-settings" -> onSettings()
+                    "home-login" -> onLogin()
                 }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    preview(compact)
-                    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().testTag("tv-home-content-viewport")) { content(compact) }
-                }
-            }
+            }, modifier = modifier, state = standaloneShell,
+        ) {
+            TvCatalogueHomeBody(focus, onOverview, onRecommendations, backdrop, preview, content)
         }
+    } else {
+        TvCatalogueHomeBody(focus, onOverview, onRecommendations, backdrop, preview, content, modifier)
     }
 }
 
 @Composable
-internal fun TvCatalogueHomeNavigation(
-    onSearch: () -> Unit,
-    onCollections: () -> Unit,
-    onHistory: () -> Unit,
-    onSettings: () -> Unit,
-    onLogin: () -> Unit,
+private fun TvCatalogueHomeBody(
     focus: TvFocusState,
-    onRecommendations: (() -> Unit)? = null,
-    onOverview: (() -> Unit)? = null,
-    onEnterContent: (() -> Unit)? = null,
-    compact: Boolean = false,
+    onOverview: (() -> Unit)?,
+    onRecommendations: (() -> Unit)?,
+    backdrop: @Composable () -> Unit,
+    preview: @Composable (Boolean) -> Unit,
+    content: @Composable (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Column(Modifier.fillMaxWidth().testTag("tv-home-sidebar"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        val navigation = buildList {
-            if (onOverview != null) add(Triple("首页", "home-overview", onOverview))
-            if (onRecommendations != null) add(Triple("推荐", "home-recommendations", onRecommendations))
-            add(Triple("搜索", "home-search", onSearch))
-            add(Triple("收藏", "home-collections", onCollections))
-            add(Triple("历史", "home-history", onHistory))
-            add(Triple("设置", "home-settings", onSettings))
-            add(Triple("账号", "home-login", onLogin))
-        }
-        navigation.forEachIndexed { index, (label, key, action) ->
-            TvButton(label, action, Modifier.fillMaxWidth().height(if (compact) 40.dp else 48.dp)
-                .tvFocusTarget(key, focus).testTag(key).onPreviewKeyEvent { event ->
-                    if (event.type != KeyEventType.KeyDown) false else when (event.key) {
-                        Key.DirectionUp -> { navigation.getOrNull(index - 1)?.let { focus.requestFocus(it.second) }; true }
-                        Key.DirectionDown -> { navigation.getOrNull(index + 1)?.let { focus.requestFocus(it.second) }; true }
-                        Key.DirectionRight -> { onEnterContent?.invoke(); onEnterContent != null }
-                        Key.DirectionLeft -> true
-                        else -> false
-                    }
-                })
+    CompositionLocalProvider(LocalTvFocusState provides focus) {
+        TvBindShellPage(focus, onOverview, onRecommendations)
+        TvRestorePageFocus(focus)
+        BoxWithConstraints(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            val compact = maxHeight < 460.dp
+            backdrop()
+            Column(
+                Modifier.fillMaxSize().onPreviewKeyEvent { focus.onNavigationKey(it); false }
+                    .padding(start = if (compact) 12.dp else 16.dp, end = if (compact) 16.dp else 24.dp,
+                        top = if (compact) 12.dp else 16.dp, bottom = if (compact) 12.dp else 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                preview(compact)
+                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().testTag("tv-home-content-viewport")) { content(compact) }
+            }
         }
     }
 }

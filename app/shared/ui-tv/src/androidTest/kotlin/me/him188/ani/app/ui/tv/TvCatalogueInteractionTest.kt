@@ -148,8 +148,8 @@ class TvCatalogueInteractionTest {
         setContent {
             TvTheme {
                 val focus = rememberTvFocusState("home-search")
-                TvPage("首页", null, focusState = focus) {
-                    TvCatalogueHomeNavigation({}, { collections++ }, {}, {}, {}, focus)
+                TvAppShell("home-search", { if (it == "home-collections") collections++ }) {
+                    TvPage("首页", null, focusState = focus) { }
                 }
             }
         }

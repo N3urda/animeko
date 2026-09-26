@@ -12,6 +12,7 @@ package me.him188.ani.app.ui.tv
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -92,8 +93,14 @@ fun TvHistoryScreen(
         isItemVisible = { key -> list.layoutInfo.visibleItemsInfo.any { it.key == key } },
     )
     var syncing by remember { mutableStateOf(false) }
-    var syncError by remember { mutableStateOf(false) }
+    var syncError by rememberSaveable { mutableStateOf(false) }
     var synced by remember { mutableStateOf(false) }
+    TvStaticFocusGroup(
+        focus, "history-", buildList {
+            if ((selfInfo.isSessionValid == true && !syncing) || (selfInfo.isSessionValid == false && onLogin != null)) add("history-sync")
+            if (syncError) add("history-retry")
+        }, fallbackKey = "page-back",
+    )
     fun sync() {
         if (syncing || selfInfo.isSessionValid != true) return
         syncing = true
@@ -175,31 +182,36 @@ internal fun TvHistoryCard(
         border = tvCardBorder(),
         scale = tvCardScale(),
     ) {
-        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (masked) "内容已遮盖" else history.subjectName ?: "条目 ${history.subjectId}",
-                        fontSize = 22.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        if (masked) "按确认键临时显示" else history.episodeName?.takeIf { it.isNotBlank() }
-                            ?: "剧集 ${history.episodeSort ?: history.episodeId}",
-                        fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val compact = maxWidth < 640.dp
+            Column(Modifier.fillMaxWidth().padding(if (compact) 16.dp else 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (compact) 16.dp else 28.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(if (masked) "内容已遮盖" else history.subjectName ?: "条目 ${history.subjectId}",
+                            Modifier.testTag("tv-history-title-${history.episodeId}"),
+                            fontSize = if (compact) 20.sp else 22.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            if (masked) "按确认键临时显示" else history.episodeName?.takeIf { it.isNotBlank() }
+                                ?: "剧集 ${history.episodeSort ?: history.episodeId}",
+                            fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (!masked) Column(Modifier.width(if (compact) 140.dp else 190.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("继续观看", fontSize = 20.sp)
+                        Text(
+                            history.durationMillis?.takeIf { it > 0 }?.let {
+                                "${tvPlaybackTime(history.positionMillis.coerceIn(0, it))} / ${tvPlaybackTime(it)}"
+                            } ?: "已播放 ${tvPlaybackTime(history.positionMillis)}",
+                            Modifier.testTag("tv-history-time-${history.episodeId}"),
+                            fontSize = if (compact) 16.sp else 18.sp,
+                        )
+                    }
                 }
-                if (!masked) Column(Modifier.width(190.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("继续观看", fontSize = 20.sp)
-                    Text(
-                        history.durationMillis?.takeIf { it > 0 }?.let {
-                            "${tvPlaybackTime(history.positionMillis.coerceIn(0, it))} / ${tvPlaybackTime(it)}"
-                        } ?: "已播放 ${tvPlaybackTime(history.positionMillis)}",
-                        fontSize = 18.sp,
-                    )
-                }
-            }
-            if (!masked) history.playProgress?.let { progress ->
-                Box(Modifier.fillMaxWidth().height(4.dp).background(MaterialTheme.colorScheme.surfaceVariant)) {
-                    Box(Modifier.fillMaxWidth(progress).height(4.dp).background(MaterialTheme.colorScheme.primary))
+                if (!masked) history.playProgress?.let { progress ->
+                    Box(Modifier.fillMaxWidth().height(4.dp).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                        Box(Modifier.fillMaxWidth(progress).height(4.dp).background(MaterialTheme.colorScheme.primary))
+                    }
                 }
             }
         }

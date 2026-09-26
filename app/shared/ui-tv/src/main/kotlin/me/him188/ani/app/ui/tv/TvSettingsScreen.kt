@@ -10,9 +10,11 @@ package me.him188.ani.app.ui.tv
 import android.os.StatFs
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -245,70 +247,78 @@ internal fun TvSettingsLayout(
         focus.requestFocus(target)
     }
     TvPage("设置", onBack, focusState = focus) {
-        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-            Column(Modifier.width(164.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                categories.forEach { title ->
-                    TvButton(
-                        title, ::enterContent,
-                        Modifier.fillMaxWidth().tvFocusTarget("settings-category:$title", focus)
-                            .onFocusChanged { if (it.isFocused && title != category) onCategorySelected(title) }
-                            .onPreviewKeyEvent {
-                                if (it.key == Key.DirectionRight) {
-                                    if (it.type == KeyEventType.KeyDown) enterContent()
-                                    true
-                                } else false
-                            }.semantics { selected = title == category }.testTag("tv-settings-$title"),
-                        selected = title == category,
-                    )
-                }
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val compact = maxWidth < 640.dp
+            val categoryWidth = when {
+                compact -> 104.dp
+                maxWidth < 800.dp -> 128.dp
+                else -> 164.dp
             }
-            Column(
-                Modifier.weight(1f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(category, fontSize = 22.sp)
-                Text(
-                    if (busy) "正在处理，请稍候…" else status ?: "上下选择  ·  确认修改  ·  左键返回分类",
-                    Modifier.testTag("tv-settings-status"),
-                    fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis,
-                )
-                holder.SaveableStateProvider(category) {
-                    key(category) {
-                        val list = rememberLazyListState()
-                        TvLazyFocusGroup(
-                            focus, groupKey, keys, true, "settings-category:$category",
-                            scrollToItem = { index -> list.scrollToItem(items.indexOfFirst { groupKey + it.key == keys[index] }.coerceAtLeast(0)) },
-                            isItemVisible = { target -> list.layoutInfo.visibleItemsInfo.any { it.key == target } },
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(if (compact) 16.dp else 28.dp)) {
+                Column(Modifier.width(categoryWidth).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    categories.forEach { title ->
+                        TvButton(
+                            title, ::enterContent,
+                            Modifier.fillMaxWidth().tvFocusTarget("settings-category:$title", focus)
+                                .onFocusChanged { if (it.isFocused && title != category) onCategorySelected(title) }
+                                .onPreviewKeyEvent {
+                                    if (it.key == Key.DirectionRight) {
+                                        if (it.type == KeyEventType.KeyDown) enterContent()
+                                        true
+                                    } else false
+                                }.semantics { selected = title == category }.testTag("tv-settings-$title"),
+                            selected = title == category,
                         )
-                        LazyColumn(state = list, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            items(items, key = { groupKey + it.key }) { item ->
-                                val target = groupKey + item.key
-                                val modifier = Modifier.fillMaxWidth().tvFocusTarget(target, focus)
-                                    .onFocusChanged { if (it.isFocused) lastContent = lastContent + (category to target) }
-                                    .testTag("tv-settings-row-${item.key}")
-                                when {
-                                    item.input != null -> TvOutlinedTextField(
-                                        item.input, modifier.testTag("tv-subscription-url"), enabled = !busy,
-                                        label = { Text(item.title) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                                        onNavigateLeft = { focus.requestFocus("settings-category:$category") },
-                                    )
-                                    item.onClick != null -> TvSettingsRow(
-                                        item,
-                                        modifier.onPreviewKeyEvent {
-                                            if (it.key == Key.DirectionLeft) {
-                                                if (it.type == KeyEventType.KeyDown) focus.requestFocus("settings-category:$category")
-                                                true
-                                            } else false
-                                        },
-                                        onClick = { if (!busy) item.onClick.invoke() },
-                                    )
-                                    else -> Column(
-                                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp)).padding(18.dp),
-                                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                                    ) {
-                                        Text(item.title, fontSize = 18.sp)
-                                        if (item.description.isNotEmpty()) Text(item.description, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Column(
+                    Modifier.weight(1f).fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(category, fontSize = 22.sp)
+                    Text(
+                        if (busy) "正在处理，请稍候…" else status ?: "上下选择  ·  确认修改  ·  左键返回分类",
+                        Modifier.testTag("tv-settings-status"),
+                        fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    )
+                    holder.SaveableStateProvider(category) {
+                        key(category) {
+                            val list = rememberLazyListState()
+                            TvLazyFocusGroup(
+                                focus, groupKey, keys, true, "settings-category:$category",
+                                scrollToItem = { index -> list.scrollToItem(items.indexOfFirst { groupKey + it.key == keys[index] }.coerceAtLeast(0)) },
+                                isItemVisible = { target -> list.layoutInfo.visibleItemsInfo.any { it.key == target } },
+                            )
+                            LazyColumn(state = list, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                items(items, key = { groupKey + it.key }) { item ->
+                                    val target = groupKey + item.key
+                                    val modifier = Modifier.fillMaxWidth().tvFocusTarget(target, focus)
+                                        .onFocusChanged { if (it.isFocused) lastContent = lastContent + (category to target) }
+                                        .testTag("tv-settings-row-${item.key}")
+                                    when {
+                                        item.input != null -> TvOutlinedTextField(
+                                            item.input, modifier.testTag("tv-subscription-url"), enabled = !busy,
+                                            label = { Text(item.title) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                                            onNavigateLeft = { focus.requestFocus("settings-category:$category") },
+                                        )
+                                        item.onClick != null -> TvSettingsRow(
+                                            item,
+                                            modifier.onPreviewKeyEvent {
+                                                if (it.key == Key.DirectionLeft) {
+                                                    if (it.type == KeyEventType.KeyDown) focus.requestFocus("settings-category:$category")
+                                                    true
+                                                } else false
+                                            },
+                                            onClick = { if (!busy) item.onClick.invoke() },
+                                        )
+                                        else -> Column(
+                                            Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp)).padding(18.dp),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            Text(item.title, fontSize = 18.sp)
+                                            if (item.description.isNotEmpty()) Text(item.description, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
                                     }
                                 }
                             }

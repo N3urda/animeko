@@ -49,12 +49,15 @@ class TvFocusState internal constructor(
     private val savedKey: MutableState<String?>,
     private val savedIndex: MutableState<Int>,
     internal val initialKey: String,
+    private val savedContentKey: MutableState<String?>,
+    private val savedContentIndex: MutableState<Int>,
 ) {
     internal val groups = mutableStateMapOf<String, TvFocusGroupSpec>()
     internal val layouts = mutableMapOf<String, TvFocusGroupLayout>()
     internal val nodes = mutableStateMapOf<String, FocusRequester>()
     internal var requestVersion by mutableIntStateOf(0)
     internal val requestedKey: String get() = savedKey.value ?: initialKey
+    internal val contentKey: String get() = savedContentKey.value ?: initialKey
     private var hasRestored = false
     private var manualNavigation = false
     private var initialFocusProvisional = false
@@ -89,7 +92,11 @@ class TvFocusState internal constructor(
         savedKey.value = key
         savedIndex.value = groups.values.firstNotNullOfOrNull { group ->
             group.keys.indexOf(key).takeIf { it >= 0 }
-        } ?: 0
+        } ?: if (key == savedContentKey.value) savedContentIndex.value else 0
+        if (!key.startsWith("home-")) {
+            savedContentKey.value = key
+            savedContentIndex.value = savedIndex.value
+        }
     }
 
     internal fun onFocused(key: String) {
@@ -142,7 +149,9 @@ internal class TvFocusGroupLayout(val scrollToItem: suspend (Int) -> Unit, val i
 fun rememberTvFocusState(initialKey: String = "page-back"): TvFocusState {
     val saved = rememberSaveable { mutableStateOf<String?>(null) }
     val savedIndex = rememberSaveable { mutableStateOf(0) }
-    return remember { TvFocusState(saved, savedIndex, initialKey) }
+    val savedContentKey = rememberSaveable { mutableStateOf<String?>(null) }
+    val savedContentIndex = rememberSaveable { mutableStateOf(0) }
+    return remember { TvFocusState(saved, savedIndex, initialKey, savedContentKey, savedContentIndex) }
 }
 
 internal val LocalTvFocusState = staticCompositionLocalOf<TvFocusState> { error("TV focus requires TvPage") }

@@ -4,13 +4,13 @@
 
 ## 安装
 
-交付文件位于 `output/android-tv/release-20260926-sidebar/`，也可从 [GitHub Release](https://github.com/N3urda/animeko/releases/tag/android-tv-preview-20260926-r2) 下载：
+交付文件位于 `output/android-tv/release-20260926-shell/`，也可从 [GitHub Release](https://github.com/N3urda/animeko/releases/tag/android-tv-preview-20260926-r3) 下载：
 
 | 文件 | 适用设备 |
 | --- | --- |
-| `Animeko-TV-sidebar-20260926-universal.apk` | 首选，包含 ARM64 和 ARM32，系统自动选择 |
-| `Animeko-TV-sidebar-20260926-arm64-v8a.apk` | 已确认使用 64 位 Android 系统的电视 |
-| `Animeko-TV-sidebar-20260926-armeabi-v7a.apk` | 使用 32 位 Android 系统的电视 |
+| `Animeko-TV-shell-20260926-universal.apk` | 首选，包含 ARM64 和 ARM32，系统自动选择 |
+| `Animeko-TV-shell-20260926-arm64-v8a.apk` | 已确认使用 64 位 Android 系统的电视 |
+| `Animeko-TV-shell-20260926-armeabi-v7a.apk` | 使用 32 位 Android 系统的电视 |
 
 电视芯片支持 64 位不代表电视系统为 64 位；不确定时使用通用包。三种 APK 是同一个应用，选择一个安装即可。
 
@@ -22,13 +22,21 @@
 已经配置 ADB 的设备，也可使用：
 
 ```sh
-adb install -r Animeko-TV-sidebar-20260926-universal.apk
+adb install -r Animeko-TV-shell-20260926-universal.apk
 adb shell am start -n me.him188.ani.tvpreview/me.him188.ani.android.activity.MainActivity
 ```
 
-本次首页包的应用包名为 `me.him188.ani.tvpreview`，名称为 `Animeko TV Preview`，采用 Release 库和 R8 优化，关闭调试模式。版本为 `4.9.0-dev`，版本号 `50406`。签名证书 SHA-256 为 `fad6b4417e67a8742a332d1e15ce2dc79a2f33b45b3c853058380cf08da94d06`，与 2026-09-21 的 TV Preview 相同，可覆盖安装并保留本地数据。
+本次电视包的应用包名为 `me.him188.ani.tvpreview`，名称为 `Animeko TV Preview`，采用 Release 库和 R8 优化，关闭调试模式。版本为 `4.9.0-dev`，版本号 `50406`。签名证书 SHA-256 为 `fad6b4417e67a8742a332d1e15ce2dc79a2f33b45b3c853058380cf08da94d06`，与 2026-09-21 的 TV Preview 相同，可覆盖安装并保留本地数据。
 
 2026-09-22 至 09-23 的 Performance 版使用 `me.him188.ani.tvpreview.performance` 和另一份签名，与本包并存。两者账号状态、设置和本机记录独立，不会自动迁移；安装本包无需卸载已有应用。
+
+## 全局导航
+
+首页、推荐、搜索、收藏、历史、设置和账号共用左侧导航，页面与番剧详情显示在右侧内容区。当前入口保持选中；上下选择导航，确认切换，右键回到当前页最近的内容焦点。内容区域的左边界回到当前入口；设置内容先回内部分类，再向左回全局导航。文字编辑时左右键移动光标。
+
+每个 Tab 独立保存搜索条件、列表位置和详情返回路径，重复选择不会累积重复页面。返回先退出详情或授权子页，再从 Tab 根回到首页；首页返回由系统处理。首页与推荐分别定位首页概览和纵向推荐网格。视频播放器使用全屏；筛选、简介和确认操作保持模态弹窗。
+
+搜索工具栏、设置分类、登录表单、详情和历史卡片按照右侧剩余宽度布局。侧栏在输入法压缩高度时可纵向滚动，底部入口仍可通过遥控器到达。账号页面发送验证码后切换 Tab 可继续填写；验证码请求和表单有效状态共用 ViewModel 生命周期。
 
 ## 首页浏览
 
@@ -69,6 +77,10 @@ Bangumi 二维码在电视本地生成，手机打开现有服务的授权链接
 播放中区分查询、解析、缓冲、暂停、结束和失败；同一等待状态持续约 15 秒时，控制栏显示换源和重试入口。选集、字幕和音轨侧栏会定位当前选项。
 
 设置左侧上下选择分类，确认或右键进入内容，非编辑状态左键回分类；编辑网址时左右移动光标，先返回关闭输入法再导航。每类保留最近选项。开关显示明确的开启 / 关闭状态，删除和退出登录默认聚焦取消。设置包括订阅网址和更新、数据源启停、播放选项、视频缓存、账号和界面模式。标准 Android TV 自动进入电视界面；部分厂商电视未声明标准电视特征时可选择电视模式。
+
+## 2026-09-26 全局导航验证
+
+最终代码通过 60 项 TV 单元测试和完整 123 项 Android Compose 交互测试，均无失败或跳过。包含真实 NavDisplay 的多 Tab 状态与 ViewModel 保留、相同详情跨 Tab 隔离、系统返回顺序、搜索与历史遥控往返、输入光标、空首页导航、列表条目消失后的邻项恢复、账号发码后切换、全屏播放边界及紧凑页面布局。导航架构与焦点交互审查完成。
 
 ## 2026-09-26 侧栏与纵向推荐验证
 

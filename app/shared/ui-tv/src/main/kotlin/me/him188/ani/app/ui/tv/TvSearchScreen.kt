@@ -10,9 +10,11 @@
 package me.him188.ani.app.ui.tv
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -77,23 +80,14 @@ fun TvSearchScreen(
         results.loadState.refresh !is LoadState.Loading
     LaunchedEffect(resultReady) { if (resultReady) awaitingSearch = false }
     TvPage("搜索番剧", onBack, modifier, focusState = focus) {
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            TvOutlinedTextField(
-                state = text,
-                modifier = Modifier.weight(1f).tvFocusTarget("search-input", focus).testTag("tv-search-input"),
-                label = { Text("番剧名称", fontSize = 18.sp) },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                onKeyboardAction = { search() },
-            )
-            TvButton("搜索", ::search, Modifier.tvFocusTarget("search-submit", focus).testTag("tv-search-submit"), enabled = tvSearchHasConstraints(state.query.copy(keywords = text.text.toString())))
-            TvButton("筛选 · 类型 / 设定", { keyboard?.hide(); showFilters = true },
-                Modifier.tvFocusTarget("search-filters", focus).testTag("tv-search-filters"))
-        }
-        if (state.query.hasFilters()) Text(tvSearchFilterSummary(state.query), fontSize = 14.sp, maxLines = 1)
+        TvSearchControls(
+            text = text,
+            canSearch = tvSearchHasConstraints(state.query.copy(keywords = text.text.toString())),
+            onSearch = ::search,
+            onFilters = { keyboard?.hide(); showFilters = true },
+            focus = focus,
+        )
+        if (state.query.hasFilters()) Text(tvSearchFilterSummary(state.query), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (state.hasActiveSearch && tvSearchHasConstraints(state.query)) {
             if (awaitingSearch && pager === submittedPager) {
                 TvStaticFocusGroup(focus, "search-result:", emptyList(), ready = false, fallbackKey = "search-input")
@@ -111,6 +105,38 @@ fun TvSearchScreen(
         onApply = { showFilters = false; submit(it) },
         onDismiss = { showFilters = false; focus.requestFocus("search-filters") },
     )
+}
+
+/** 输入与操作共享一行, 窄内容区为关键词保留可读宽度. */
+@Composable
+internal fun TvSearchControls(
+    text: TextFieldState,
+    canSearch: Boolean,
+    onSearch: () -> Unit,
+    onFilters: () -> Unit,
+    focus: TvFocusState,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val compact = maxWidth < 600.dp
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 20.dp),
+        ) {
+            TvOutlinedTextField(
+                state = text,
+                modifier = Modifier.weight(1f).tvFocusTarget("search-input", focus).testTag("tv-search-input"),
+                label = { Text("番剧名称", fontSize = 18.sp) },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                onKeyboardAction = { onSearch() },
+            )
+            TvButton("搜索", onSearch,
+                Modifier.tvFocusTarget("search-submit", focus).testTag("tv-search-submit"), enabled = canSearch)
+            TvButton(if (compact) "筛选" else "筛选 · 类型 / 设定", onFilters,
+                Modifier.tvFocusTarget("search-filters", focus).testTag("tv-search-filters"))
+        }
+    }
 }
 
 @Composable

@@ -116,14 +116,15 @@ internal fun TvBangumiAuthorizeContent(
     }
     TvPage(if (binding) "绑定 Bangumi" else "Bangumi 登录", onBack, focusState = focus) {
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val qrSize = minOf(240.dp, maxHeight, maxWidth * .4f)
-            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
+            val compact = maxWidth < 600.dp
+            val qrSize = minOf(if (compact) 192.dp else 240.dp, maxHeight, maxWidth * .4f)
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(if (compact) 16.dp else 28.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(qrSize).background(if (qr != null) Color.White else Color.Transparent), contentAlignment = Alignment.Center) {
                     if (qr != null) Image(qr, "手机扫描 Bangumi 授权二维码", Modifier.fillMaxSize().testTag("tv-oauth-qr"), filterQuality = FilterQuality.None)
                     else Text(if (state == TvOAuthRequestState.Loading) "正在获取二维码…" else "手机扫码授权", fontSize = 20.sp)
                 }
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("使用手机相机扫码，在手机浏览器登录 Bangumi 并授权。完成后电视会自动${if (binding) "关联账号" else "登录"}。", fontSize = 18.sp)
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp)) {
+                    Text("使用手机相机扫码，在手机浏览器登录 Bangumi 并授权。完成后电视会自动${if (binding) "关联账号" else "登录"}。", fontSize = if (compact) 16.sp else 18.sp)
                     Text(when (state) {
                         TvOAuthRequestState.Idle -> "选择下方按钮获取本次授权二维码。"
                         TvOAuthRequestState.Loading -> "正在连接授权服务…"

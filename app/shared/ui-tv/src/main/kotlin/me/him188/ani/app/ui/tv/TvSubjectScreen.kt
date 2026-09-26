@@ -12,7 +12,9 @@ package me.him188.ani.app.ui.tv
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -124,16 +126,17 @@ private fun TvSubjectContent(
         if (info.summary.isNotBlank()) add("subject:summary")
     }
     TvCatalogueEpisodeGrid(episodes, playEpisode?.episodeId, headerFocusKeys, onEpisode) {
-        Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val compact = maxWidth < 640.dp
+            Row(horizontalArrangement = Arrangement.spacedBy(if (compact) 16.dp else 28.dp)) {
                 AsyncImage(
                     info.imageLarge, null,
-                    Modifier.width(156.dp).aspectRatio(2f / 3f),
+                    Modifier.width(if (compact) 112.dp else 156.dp).aspectRatio(2f / 3f),
                     contentScale = ContentScale.Fit,
                     crossfade = false,
                 )
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text(info.displayName, fontSize = 28.sp, lineHeight = 36.sp)
+                    Text(info.displayName, fontSize = if (compact) 24.sp else 28.sp, lineHeight = if (compact) 30.sp else 36.sp)
                     Text(
                         buildList {
                             add(if (info.ratingInfo.total > 0) "评分 ${info.ratingInfo.score}" else "暂无评分")
@@ -142,7 +145,7 @@ private fun TvSubjectContent(
                         fontSize = 18.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (playEpisode != null) {
                             TvButton(
                                 tvCataloguePlaybackLabel(playEpisode), { onEpisode(playEpisode.episodeId) },
@@ -163,14 +166,13 @@ private fun TvSubjectContent(
                                 }
                             },
                             enabled = canCollect && !collection.isSetSelfCollectionTypeWorking,
-                            modifier = Modifier.tvFocusTarget("subject:collection", focus),
+                            modifier = Modifier.tvFocusTarget("subject:collection", focus).testTag("tv-subject-collection"),
                         )
                     }
                     if (info.summary.isNotBlank()) TvCatalogueSummaryButton(info.displayName, info.summary)
                     if (collectionError) Text("收藏操作失败，请重试。", color = MaterialTheme.colorScheme.error, fontSize = 18.sp)
                 }
             }
-
         }
     }
 }
