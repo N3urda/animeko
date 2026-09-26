@@ -26,4 +26,6 @@
 - [x] Run `:app:shared:ui-tv:testDebugUnitTest` and affected Android instrumentation, then complete the TV instrumentation regression once changes stabilize.
 - [x] Build `:app:android:assembleDefaultTvPreview`, install the optimized ARM64 APK, inspect screenshots at both viewport sizes and drive real recommendation paging/detail-return paths.
 - [x] Complete independent specification and code quality review; update installation and verification documentation with actual results.
-- [ ] Commit and push, publish dated versioned APKs/checksums/screenshots to the user's fork, and verify uploaded digests and download access.
+- [x] Commit and push, publish dated versioned APKs/checksums/screenshots to the user's fork, and verify uploaded digests and download access.
+
+**Delivery:** Build source commit `61653b043a2c2ae55c505283fc764c6fb6f0e79b` on `codex/tv-home-discovery`. [Sidebar and vertical recommendation release](https://github.com/N3urda/animeko/releases/tag/android-tv-preview-20260926-r2) includes three APKs, three final screenshots, checksums, package manifest and installation/validation notes. All nine assets match local sizes and SHA-256 digests; public checksum download and universal APK access are verified.
